@@ -35,6 +35,21 @@ export function emptyState(seed: number): State {
     food: 40,
     wood: 24,
     rngState: seed >>> 0 || 1,
+    uid: 1,
+    homes: [],
+    structs: [],
+    vills: [],
+    held: null,
+    totem: null,
+    best: 0,
+    maxLv: -1,
+    popNow: 0,
+    won: false,
+    rains: [],
+    fest: 0,
+    cheers: [],
+    stat: { strokes: 0, drops: 0, throws: 0, woodIn: 0, taught: 0 },
+    hinted: {},
   };
 }
 
