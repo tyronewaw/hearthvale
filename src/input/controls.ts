@@ -14,6 +14,12 @@ export interface ControlsHost {
   tryGrab(clientX: number, clientY: number): boolean;
   /** Let go of what the hand holds at this ground point. */
   drop(hit: GroundHit | null): void;
+  /** Is the pet under this screen point? */
+  overPet(clientX: number, clientY: number): boolean;
+  /** Stroke (true) or scold (false) the pet. */
+  petTouch(good: boolean): void;
+  /** A plain left click on the ground; return true to consume it (e.g. Send mode). */
+  click(hit: GroundHit): boolean;
   togglePause(): void;
   toggleHelp(): void;
 }
@@ -29,7 +35,7 @@ interface Drag {
   rep: boolean;
   /** Wrapped world point held under the pointer while panning. */
   grab: { x: number; z: number } | null;
-  mode: 'pan' | 'orbit' | 'carry' | null;
+  mode: 'pan' | 'orbit' | 'carry' | 'pet' | null;
 }
 
 interface Pinch {
@@ -85,9 +91,9 @@ export class Controls {
     addEventListener('blur', () => this.keys.clear());
   }
 
-  /** Panning or turning the camera (not carrying). */
+  /** Panning or turning the camera (not carrying or stroking). */
   get dragging(): boolean {
-    return !!((this.drag?.moved && this.drag.mode !== 'carry') || this.pinch);
+    return !!((this.drag?.moved && this.drag.mode !== 'carry' && this.drag.mode !== 'pet') || this.pinch);
   }
 
   get carrying(): boolean {
@@ -131,9 +137,15 @@ export class Controls {
       x: e.clientX, y: e.clientY, btn: e.button, pt: e.pointerType, moved: false,
       t0: performance.now(), last: 0, rep: false, grab: null, mode: null,
     };
-    if (e.button === 0 && this.host.tool() === 'hand' && this.host.tryGrab(e.clientX, e.clientY)) {
-      this.drag.mode = 'carry';
-      this.drag.moved = true;
+    if (e.button === 0 && this.host.tool() === 'hand') {
+      if (this.host.overPet(e.clientX, e.clientY)) {
+        // the pet can be stroked, never picked up
+        this.drag.mode = 'pet';
+        this.drag.moved = true;
+      } else if (this.host.tryGrab(e.clientX, e.clientY)) {
+        this.drag.mode = 'carry';
+        this.drag.moved = true;
+      }
     }
   }
 
@@ -156,7 +168,7 @@ export class Controls {
           d.grab = p ? { x: wrap(p.x), z: wrap(p.z) } : null;
         } else d.mode = 'orbit';
       }
-      if (d.mode === 'carry') {
+      if (d.mode === 'carry' || d.mode === 'pet') {
         /* the held thing follows the hover point */
       } else if (d.moved && d.mode === 'pan' && d.grab) this.panTo(d.grab, e.clientX, e.clientY);
       else if (d.moved && d.mode === 'orbit') {
@@ -191,14 +203,20 @@ export class Controls {
       this.host.drop(this.hover);
       return;
     }
+    if (d?.mode === 'pet') {
+      if (!cancel && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 14) this.host.petTouch(true);
+      return;
+    }
     if (!d || cancel || d.moved || d.rep) return;
     this.pointer = { x: e.clientX, y: e.clientY };
     this.updateHover();
     const h = this.hover;
     if (!h) return;
     const tool = this.host.tool();
-    if (d.btn === 2) this.host.act('lower', h);
-    else if (d.btn === 0 && tool !== 'hand') this.host.act(tool, h);
+    if (d.btn === 2) {
+      if (this.host.overPet(e.clientX, e.clientY)) this.host.petTouch(false);
+      else this.host.act('lower', h);
+    } else if (d.btn === 0 && !this.host.click(h) && tool !== 'hand') this.host.act(tool, h);
     if (e.pointerType !== 'mouse') {
       // no hover on touch screens once the finger lifts
       this.pointer = null;
@@ -267,7 +285,7 @@ export class Controls {
       this.updateHover();
     }
     const d = this.drag, tool = this.host.tool();
-    if (d && !d.moved && (d.btn === 2 || (d.btn === 0 && (tool === 'raise' || tool === 'lower'))) && now - d.t0 > HOLD_DELAY && now - d.last > HOLD_EVERY) {
+    if (d && !d.moved && (d.btn === 2 || (d.btn === 0 && (tool === 'raise' || tool === 'lower'))) && now - d.t0 > HOLD_DELAY && now - d.last > HOLD_EVERY && !(this.pointer && this.host.overPet(this.pointer.x, this.pointer.y))) {
       d.last = now;
       d.rep = true;
       this.updateHover();

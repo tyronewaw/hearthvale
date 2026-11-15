@@ -11,6 +11,8 @@ export interface UiHandlers {
   togglePause(): boolean;
   cycleSpeed(): number;
   newWorld(): void;
+  /** The welcome screen was dismissed (a new player chooses their pet next). */
+  helpClosed(): void;
 }
 
 /** The HTML overlay: HUD, toolbar, toasts, tooltips and modals. Reads sim state, never writes it. */
@@ -27,7 +29,10 @@ export class Ui {
       $('bSpeed').textContent = this.h.cycleSpeed() + '×';
     };
     $('bHelp').onclick = () => this.toggleHelp(true);
-    $('bStart').onclick = () => this.toggleHelp(false);
+    $('bStart').onclick = () => {
+      this.toggleHelp(false);
+      this.h.helpClosed();
+    };
     $('bNew').onclick = () => $('conf').classList.add('show');
     $('bNo').onclick = () => $('conf').classList.remove('show');
     $('bYes').onclick = () => {

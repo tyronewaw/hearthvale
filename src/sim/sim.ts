@@ -2,8 +2,11 @@ import { BALANCE } from './balance';
 import { BMAX, STRUCTS, TOOL, TOOLS, type StructKind, type ToolId } from './defs';
 import type { SimEvent } from './events';
 import { spreadTrees } from './flora';
+import {
+  PETS, feedPet, mkPet, petCatch, stepPet, stepPoos, teach, type Habit, type Leash, type PetCtx, type PetKind,
+} from './pet';
 import { Rng } from './rng';
-import { bump, level, rise } from './terrain';
+import { bump, isWater, level, rise } from './terrain';
 import {
   calcCrops, destroyHome, grabFlora, grabVillager, hearth, land, mkV, placeStruct, popCount, rebuildMap, recheck,
   roleCount, spark, stepV, syncResidents, validSite, finish, type Ctx,
@@ -20,7 +23,7 @@ export { TOOLS, type ToolId } from './defs';
  * The whole game simulation. Pure TypeScript, no Three.js or DOM, so it runs in tests and
  * headless scripts. Advance it with `tick()` at a fixed 10 Hz; read `S` to render.
  */
-export class Sim implements Ctx {
+export class Sim implements Ctx, PetCtx {
   S: State;
   rng: Rng;
   events: SimEvent[] = [];
@@ -28,6 +31,8 @@ export class Sim implements Ctx {
   crops = new Set<number>();
   /** Sandbox mode (URL ?sandbox): tools cost nothing. */
   sandbox = false;
+  /** Where the hand points on the ground (torus), set by the game each frame; the pet's Follow uses it. */
+  handGround: [number, number] | null = null;
   private lastSeason: number;
   /** Countdown timers (not saved, as in the prototype's `tm`). */
   private tm = { spread: 0, re: 0, res: 0 };
@@ -35,6 +40,10 @@ export class Sim implements Ctx {
   constructor(S: State) {
     this.S = S;
     this.rng = new Rng(S.rngState);
+    if (S.pet) {
+      S.pet.act = null;
+      S.pet.carry = null;
+    }
     this.lastSeason = season(S.t);
     rebuildMap(this);
     recheck(this);
@@ -119,6 +128,10 @@ export class Sim implements Ctx {
         } else b.pop = BMAX[b.lv]!;
       }
     }
+
+    // The pet and its droppings
+    stepPet(this, dt);
+    stepPoos(this, dt);
 
     // Villagers
     const gone = new Set<Vill>();
@@ -236,7 +249,7 @@ export class Sim implements Ctx {
     const h = this.S.held;
     if (!h) return;
     this.S.held = null;
-    land(this, h, x, y, thrown);
+    if (!petCatch(this, h, x, y, thrown)) land(this, h, x, y, thrown);
   }
 
   /**
@@ -251,10 +264,75 @@ export class Sim implements Ctx {
   }
 
   /** A released object has come to rest at (x, y). */
-  landed(obj: Held, x: number, y: number, thrown: boolean): void {
+  landed(obj: Held, x: number, y: number, thrown: boolean, quiet = false): void {
     const i = this.S.flying.indexOf(obj);
     if (i >= 0) this.S.flying.splice(i, 1);
-    land(this, obj, x, y, thrown);
+    if (!petCatch(this, obj, x, y, thrown)) land(this, obj, x, y, thrown, quiet);
+  }
+
+  // ---------------------------------------------------------------- the pet
+
+  /** The first quest: a pet arrives by the Hearth (or at x, y). */
+  choosePet(kind: PetKind, name: string, x?: number, y?: number): void {
+    const H = this.S.structs.find((s) => s.k === 'hearth');
+    const px = x ?? (H ? H.x + 1.5 : this.S.start[0] + 1.5), py = y ?? (H ? H.y + 1.5 : this.S.start[1] + 1.5);
+    this.S.pet = mkPet(kind, name || PETS[kind].def, px, py);
+    spark(this, px, py, 'spark', 10);
+    this.emit({ k: 'sfx', id: 'magic' });
+    this.emit({ k: 'toast', msg: `${this.S.pet.name} the ${PETS[kind].name.toLowerCase()} has arrived` });
+  }
+
+  setLeash(mode: Leash): void {
+    const P = this.S.pet;
+    if (!P) return;
+    P.mode = mode;
+    P.act = null;
+    if (mode === 'stay') {
+      P.post = [P.x, P.y];
+      this.emit({ k: 'toast', msg: `${P.name} will stay around here` });
+    }
+  }
+
+  /** Send: walk to (x, y) and stay there. */
+  sendPet(x: number, y: number): void {
+    const P = this.S.pet;
+    if (!P) return;
+    P.mode = 'stay';
+    P.post = [wrap(x), wrap(y)];
+    P.act = { id: 'follow', ph: 'go', tx: P.post[0], ty: P.post[1], t: 0.1, tile: [Math.floor(P.post[0]), Math.floor(P.post[1])], go: 0 };
+    this.emit({ k: 'toast', msg: `${P.name} is on its way and will stay there` });
+  }
+
+  stroke(): Habit | null {
+    return teach(this, true);
+  }
+
+  scold(): Habit | null {
+    return teach(this, false);
+  }
+
+  feed(): boolean {
+    return feedPet(this);
+  }
+
+  /** The open hand swept through the pet: nudge it along a little. */
+  nudgePet(dx: number, dy: number): void {
+    const P = this.S.pet;
+    if (!P) return;
+    const nx = wrap(P.x + dx), ny = wrap(P.y + dy);
+    if (isWater(this.S, Math.floor(nx), Math.floor(ny))) return;
+    P.x = nx;
+    P.y = ny;
+  }
+
+  /** Throw a villager (monkey mischief). The game flies it with physics, then calls landed(). */
+  fling(v: Vill, vx: number, vz: number): void {
+    const i = this.S.vills.indexOf(v);
+    if (i < 0) return;
+    this.S.vills.splice(i, 1);
+    const obj: Held = { k: 'v', v };
+    this.S.flying.push(obj);
+    this.emit({ k: 'launch', obj, x: v.x, z: v.y, vx, vz });
   }
 
   /** Reshaped tiles lose their trees, flowers and rocks (the prototype's `after`), then buildings recheck. */

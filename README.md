@@ -12,7 +12,7 @@ It is being rebuilt in phases, and each phase ends playable.
 2. ✅ Water, sky, day/night, seasons, shadows, trees
 3. ✅ Huts, villagers, growth and economy
 4. ✅ The god hand with physics grab and throw
-5. The god pet: needs, habits, teaching, tricks
+5. ✅ The god pet: needs, habits, teaching, tricks
 6. Blessings, quests, full UI, sound, saves
 7. Mobile polish and performance
 8. Installable PWA
@@ -22,6 +22,7 @@ It is being rebuilt in phases, and each phase ends playable.
 - **Raise / Lower** (`2` / `3`): click to lift land, right-click to sink it, and hold to repeat. Homes grow with the flat land around them.
 - **Build** (`4`): Hearth, Farm, Lumber camp, Fishing hut, Shrine (they cost wood).
 - **Totem** (`5`): wanderers head there to look for land.
+- **Your pet** (sheep, monkey or chicken): click it with the Hand to stroke, right-click to scold, straight after something it did, to teach it. Drop trees on it as snacks. Leash it: Free, Follow, Stay or Send.
 - Wheel to zoom, `Q`/`E` or right-drag to turn, `WASD` to pan, `Space` to pause. The world saves itself in your browser.
 
 ## Develop

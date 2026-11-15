@@ -16,6 +16,7 @@ import { Flora } from './flora';
 import { Kit } from './kit';
 import { castsShadow, worldMat } from './materials';
 import { Particles } from './particles';
+import { PetView } from './pets';
 import type { Quality } from './quality';
 import { WATER_Y, standY, yOf } from './scale';
 import { Sky } from './sky';
@@ -70,6 +71,7 @@ export class GameRenderer {
   private trees: InstancedMesh;
   private rocks: InstancedMesh;
   readonly hand: Hand;
+  readonly pet: PetView;
   private dirty = new Set<number>();
 
   constructor(canvas: HTMLCanvasElement, private S: State, private rig: CameraRig, readonly q: Quality) {
@@ -108,6 +110,7 @@ export class GameRenderer {
       this.scene.add(m);
     }
     this.hand = new Hand(this.scene);
+    this.pet = new PetView(this.scene);
   }
 
   /** Water splash at torus (x, z). */
@@ -182,6 +185,7 @@ export class GameRenderer {
     this.rocks.count = nr;
     this.trees.instanceMatrix.needsUpdate = this.rocks.instanceMatrix.needsUpdate = true;
     this.villagers.update(S, fx, fz, time, view.alpha, this.rig.dist * 1.25 + 14, extra);
+    this.pet.update(S, fx, fz, time, view.alpha);
     this.particles.update(view.dt, fx, fz);
 
     const dist = this.rig.dist, fog = this.scene.fog as Fog;

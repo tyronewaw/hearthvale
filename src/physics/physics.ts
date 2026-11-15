@@ -53,6 +53,9 @@ export class Physics {
   flyers: Flyer[] = [];
   /** Splashes since the last step (torus x/z), for the renderer. */
   splashes: { x: number; z: number }[] = [];
+  /** The pet: a kinematic ball that thrown things bounce off (it can be nudged, never picked up). */
+  private petBody: RigidBody | null = null;
+  private petR = 0;
 
   /** Load Rapier's WASM (lazily, after the first frame) and build the world. */
   static async load(S: State): Promise<Physics> {
@@ -132,6 +135,22 @@ export class Physics {
       this.world.createCollider(R.ColliderDesc.ball(s).setDensity(2.5).setFriction(0.7).setRestitution(0.25), body);
     }
     this.flyers.push({ obj, body, thrown, t: 0, still: 0, wet: false });
+  }
+
+  /** Keep the pet's collider where the pet is (torus x/z, world y of its middle), or remove it. */
+  setPet(p: { x: number; y: number; z: number; r: number } | null): void {
+    if (!p) {
+      if (this.petBody) this.world.removeRigidBody(this.petBody);
+      this.petBody = null;
+      return;
+    }
+    if (!this.petBody || Math.abs(p.r - this.petR) > 0.05) {
+      if (this.petBody) this.world.removeRigidBody(this.petBody);
+      this.petBody = this.world.createRigidBody(this.R.RigidBodyDesc.kinematicPositionBased());
+      this.world.createCollider(this.R.ColliderDesc.ball(p.r).setRestitution(0.5), this.petBody);
+      this.petR = p.r;
+    }
+    this.petBody.setNextKinematicTranslation({ x: this.ax + wd(this.ax, p.x), y: p.y, z: this.az + wd(this.az, p.z) });
   }
 
   /** Advance by dt seconds. Returns what has come to rest (for Sim.landed). */

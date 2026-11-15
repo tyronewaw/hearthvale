@@ -610,7 +610,7 @@ export function grabFlora(c: Ctx, x: number, y: number, what: 'tree' | 'rock'): 
  * Something the hand let go of has come to rest at (x, y): a tree or rock, or a villager
  * (who may get a job, join a home, or just land a bit dizzy). As in the prototype's `land`.
  */
-export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: number } | { k: 'rock'; rock: number }, x: number, y: number, thrown: boolean): void {
+export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: number } | { k: 'rock'; rock: number }, x: number, y: number, thrown: boolean, quiet = false): void {
   const S = c.S;
   x = wrap(x);
   y = wrap(y);
@@ -649,9 +649,9 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
   v.dizzy = thrown ? 2.2 : 0.4;
   v.think = 0;
   if (thrown) {
-    S.stat.throws++;
+    if (!quiet) S.stat.throws++;
     spark(c, x, y, 'star', 1);
-  } else S.stat.drops++;
+  } else if (!quiet) S.stat.drops++;
   sfx(c, 'land');
   if (isWater(S, tx, ty)) spark(c, x, y, 'splash', 6);
   const s = nearStruct(S, x, y, 1.3);

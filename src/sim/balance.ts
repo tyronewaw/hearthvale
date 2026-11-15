@@ -42,6 +42,17 @@ export const BALANCE = {
   /** Seconds for a site to finish by itself, and per builder-second (proto). */
   selfBuild: 70,
   builderBuild: 14,
+  /** Pet growth: xp for young and grand (proto). */
+  petYoung: 40,
+  petGrand: 160,
+  /** Seconds after an action that a stroke or scold still teaches it (proto). */
+  teachWindow: 20,
+  /** Seconds a sheep's fertiliser doubles a farm (proto). */
+  fertSeconds: 45,
+  /** Blessing durations (proto). */
+  rainSeconds: 25,
+  festSeconds: 40,
+
   /**
    * The final quest's population (proto 500, ×2). The balance probe (npm run balance) reaches
    * 500 around day 9 and 1000 around day 14 on the 128² planet with a diligent player.
