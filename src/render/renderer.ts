@@ -1,14 +1,14 @@
 import {
-  ConeGeometry, DodecahedronGeometry, IcosahedronGeometry, CylinderGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
+  Box3, ConeGeometry, DodecahedronGeometry, Frustum, IcosahedronGeometry, CylinderGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
   MeshLambertMaterial, NoToneMapping, Quaternion, Scene, Vector3, WebGLRenderer, type BufferGeometry, type Fog,
 } from 'three';
 import type { FlyerPose } from '../physics/physics';
 import { Hand, type HandPose } from './hand';
 import type { StructKind, ToolId } from '../sim/defs';
 import type { SimEvent } from '../sim/events';
-import { chunkOfTile, idx, season, tod, wd, wrap, type State } from '../sim/world';
+import { CHUNK, CHUNKS, chunkOfTile, idx, season, tod, wd, wrap, type State } from '../sim/world';
 import type { GroundHit } from '../input/picking';
-import { bent } from './bend';
+import { bend, bent } from './bend';
 import { Buildings } from './buildings';
 import type { CameraRig } from './camera-rig';
 import { Clouds } from './clouds';
@@ -77,6 +77,11 @@ export class GameRenderer {
   readonly pet: PetView;
   private effects: Effects;
   private dirty = new Set<number>();
+  /** Which chunks the camera can see this frame (frustum test on bent bounds). */
+  readonly vis = new Uint8Array(CHUNKS * CHUNKS);
+  private frustum = new Frustum();
+  private box = new Box3();
+  private pm = new Matrix4();
 
   constructor(canvas: HTMLCanvasElement, private S: State, private rig: CameraRig, readonly q: Quality) {
     this.gl = new WebGLRenderer({ canvas, antialias: q.antialias, powerPreference: 'high-performance' });
@@ -147,6 +152,28 @@ export class GameRenderer {
     this.sky.resize();
   }
 
+  /**
+   * Chunk-level frustum culling. Each chunk's box is built from its corners after the planet
+   * bend (the shader drops far geometry, so unbent bounds would be wrong), with headroom for
+   * trees and buildings.
+   */
+  private cull(fx: number, fz: number): void {
+    const cam = this.rig.camera;
+    this.frustum.setFromProjectionMatrix(this.pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    const half = CHUNK / 2;
+    for (let c = 0; c < this.vis.length; c++) {
+      const ccx = (c % CHUNKS) * CHUNK + half, ccz = ((c / CHUNKS) | 0) * CHUNK + half;
+      const x = fx + wd(fx, ccx), z = fz + wd(fz, ccz);
+      // the bend is lowest at the far corner and highest at the near one
+      const dx = Math.abs(x - fx), dz = Math.abs(z - fz);
+      const nearD = Math.max(0, dx - half) ** 2 + Math.max(0, dz - half) ** 2, farD = (dx + half) ** 2 + (dz + half) ** 2;
+      const lo = this.terrain.yMin[c]! - bend.k * farD, hi = this.terrain.yMax[c]! + 2.2 - bend.k * nearD;
+      this.box.min.set(x - half, Math.min(lo, 0.16 - bend.k * farD), z - half);
+      this.box.max.set(x + half, hi, z + half);
+      this.vis[c] = this.frustum.intersectsBox(this.box) ? 1 : 0;
+    }
+  }
+
   render(time: number, view: ViewState): void {
     const S = this.S, se = season(S.t);
     this.terrain.setSeason(se);
@@ -155,8 +182,10 @@ export class GameRenderer {
     this.dirty.clear();
 
     const { fx, fz } = this.rig;
-    this.terrain.place(fx, fz);
-    this.flora.update(fx, fz);
+    this.cull(fx, fz);
+    this.terrain.place(fx, fz, this.vis);
+    const cam = this.rig.camera.position;
+    this.flora.update(fx, fz, this.vis, cam.x, cam.z);
     this.water.update(time, fx, fz);
     this.sky.update(S.t);
     const d = tod(S.t), dusk = Math.max(0, 1 - Math.abs(d - 0.25) / 0.05, 1 - Math.abs(d - 0.76) / 0.05);

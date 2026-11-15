@@ -49,6 +49,9 @@ export class TerrainMesh {
   readonly group = new Group();
   readonly material = worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   private chunks: Mesh[] = [];
+  /** Lowest and highest world y in each chunk (for culling). */
+  readonly yMin = new Float32Array(CHUNKS * CHUNKS);
+  readonly yMax = new Float32Array(CHUNKS * CHUNKS);
   private pal: Palette = PALS[0]!;
 
   constructor(private S: State) {
@@ -142,15 +145,23 @@ export class TerrainMesh {
         tri(x, z, h, [0, 3, 1], 0);
         tri(x, z, h, [1, 3, 2], 1);
       }
+    let lo = 1e9, hi = -1e9;
+    for (let i = 1; i < P.length; i += 3) {
+      if (P[i]! < lo) lo = P[i]!;
+      if (P[i]! > hi) hi = P[i]!;
+    }
+    this.yMin[c] = lo;
+    this.yMax[c] = hi;
     pos.needsUpdate = nor.needsUpdate = col.needsUpdate = true;
     g.computeBoundingSphere();
     g.computeBoundingBox();
   }
 
-  /** Place every chunk at its nearest image to the focus (fx, fz in [0, N)). */
-  place(fx: number, fz: number): void {
+  /** Place every chunk at its nearest image to the focus (fx, fz in [0, N)); hide culled ones. */
+  place(fx: number, fz: number, vis?: Uint8Array): void {
     for (const m of this.chunks) {
       const c = m.userData.chunk as number;
+      m.visible = !vis || !!vis[c];
       const cx = (c % CHUNKS) * CHUNK, cz = ((c / CHUNKS) | 0) * CHUNK, half = CHUNK / 2;
       const ox = fx + wd(fx, cx + half) - half, oz = fz + wd(fz, cz + half) - half;
       if (m.position.x !== ox || m.position.z !== oz) {

@@ -3,13 +3,14 @@
 A cosy 3D god game for the browser, on desktop and phone. It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Next: phase 7 (performance polish; the user said the game is PC-first, so confirm before more mobile work), then phase 8 (PWA and deploy).
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) is done. Next: phase 8 (PWA and deploy). The user said "PC only", which reads either as no phone push notifications or as a PC-only game: mobile-specific polish (long-press scold, double-tap build, compact layout tweaks) is on hold until they confirm.
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
 - `npm run check` runs `tsc --noEmit` and Vitest. It must be green before every commit.
 - `npm run build` builds into `dist/`, with the legacy page at `dist/legacy/`.
 - `npm run smoke` builds, serves, and plays in headless Chromium through `window.__hv`. It fails on any console error and saves screenshots to `shots/` (gitignored).
+- `npm run perf` measures draw calls, triangles and frame time on the high and medium tiers at three zooms, with a grown village (software GL, so trust the counts, not the ms).
 - `npm run balance` runs a headless scripted player for `DAYS` (default 30) and writes a day-by-day table to `shots/balance.txt`. It takes about 3 s.
 - Add `?fresh` to start a new world instead of loading the save, and `?nosave` to stop autosaving.
 
@@ -122,7 +123,12 @@ legacy/       the 2D prototype (design reference; do not edit)
 - **The prototype's save is migrated** when there's no 3D save but `hearthvale-v2` exists. Its 64×64 island (65² vertices) is set into a cleared sea basin at offset 32 on a freshly generated planet, and the v2 save is left untouched. The smoke test does this end to end: it plays `/legacy/`, which saves on pagehide, then loads `/`.
 - **Sound** is fully synthesised (no audio files), so there are no licences to track. It's unlocked on the first pointer or key press, and the on/off setting is saved in localStorage (`hearthvale-sound`).
 - **Gravity is 14 u/s²** (1 unit ≈ a villager's height × 2): snappy arcs, not floaty.
-- **Budgets (smoke test, 1280×800, village of about 90 people):** high 116 draw calls and ~430k triangles; medium and low 96 calls and ~250k. The hand adds about 17 draw calls (plus its shadow passes) while it is on screen.
+- **Culling.** `GameRenderer.cull()` tests each of the 64 chunks against the camera frustum using its *bent* bounds: the drop is lowest at the far corner and highest at the near one, plus 2.2 headroom for trees and huts. The terrain hides culled chunks, and the flora only lays out instances in visible chunks. Instanced meshes stay `frustumCulled = false` because their bounds are unbent.
+- **Tree LOD.** Trees more than 28 units (horizontally) from the camera use a simple canopy with no trunk. The flora re-lays out when the visible chunk set or the camera's 4-unit LOD cell changes.
+- **Budgets (`npm run perf`, 1280×800, village of about 80):**
+  - before culling: high 458k triangles at every zoom
+  - after: high 137k / 173k / 211k triangles (94–124 calls) at zoom 0.2 / 0.45 / 1
+  - after: medium 93k–141k triangles (66–96 calls)
 - **WebGPU is deferred.** The bend uses `onBeforeCompile`, which WebGPURenderer doesn't support (it needs TSL).
 - **Our tribe is blue (user's choice).** Villagers wear tribe-blue clothing, from the prototype's `TRIBE` blues (#3f6fc4, #3566b0, #4a7fd6, #2f5ea8). Jobs show as accents on top of the blue: farmer straw hat, forester green cap, fisher teal hat, builder orange headband and tool, priest white robe trim with a feather headdress. That way the whole tribe reads as one blue people from afar, and jobs are still clear up close. Blue also tints tribe flags and festival bunting. A future rival tribe gets a different colour.
 

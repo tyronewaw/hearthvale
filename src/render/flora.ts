@@ -4,7 +4,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { hash2 } from '../sim/rng';
-import { CHUNK, N, idx, wd, type State } from '../sim/world';
+import { CHUNK, CHUNKS, N, idx, wd, type State } from '../sim/world';
 import { castsShadow, worldMat } from './materials';
 import type { Quality } from './quality';
 import { surfaceY } from './scale';
@@ -60,6 +60,17 @@ function trunk(h: number): BufferGeometry {
 interface Kind {
   canopy: InstancedMesh;
   trunk: InstancedMesh;
+  /** Far-away version: a simple canopy, no trunk. */
+  far: InstancedMesh;
+}
+
+/** Trees further than this from the camera (horizontally) use the simple model. */
+const LOD_DIST = 28;
+
+function farCanopy(kind: number): BufferGeometry {
+  if (kind === 1) return new ConeGeometry(0.36, 1.0, 5).translate(0, 0.62, 0);
+  const g = new OctahedronGeometry(kind === 0 ? 0.42 : 0.3, 0);
+  return kind === 0 ? g.scale(1, 0.95, 1).translate(0, 0.72, 0) : g.scale(1.1, 0.8, 1.1).translate(0, 0.3, 0);
 }
 
 const m4 = new Matrix4(), q4 = new Quaternion(), v3 = new Vector3(), s3 = new Vector3(), up = new Vector3(0, 1, 0);
@@ -85,14 +96,15 @@ export class Flora {
     [canopyLeafy(), canopyPine(), canopyBush()].forEach((g, i) => {
       const canopy = new InstancedMesh(g, leafMat, cap);
       const tr = new InstancedMesh(trunks[i]!, barkMat, cap);
-      for (const m of [canopy, tr]) {
+      const far = new InstancedMesh(farCanopy(i), leafMat, cap);
+      for (const m of [canopy, tr, far]) {
         m.frustumCulled = false;
         m.receiveShadow = true;
         castsShadow(m);
         m.count = 0;
         scene.add(m);
       }
-      this.kinds.push({ canopy, trunk: tr });
+      this.kinds.push({ canopy, trunk: tr, far });
     });
     this.flowers = new InstancedMesh(new OctahedronGeometry(0.07, 0), worldMat(new MeshLambertMaterial()), N * N);
     this.rocks = new InstancedMesh(new DodecahedronGeometry(0.22, 0), worldMat(new MeshLambertMaterial({ flatShading: true })), N * N / 4);
@@ -121,40 +133,58 @@ export class Flora {
     }
   }
 
-  update(fx: number, fz: number): void {
-    // Chunk images flip when the focus crosses a line at 8 + 16k, so this key captures the layout.
-    const key = `${Math.floor((fx - CHUNK / 2) / CHUNK)},${Math.floor((fz - CHUNK / 2) / CHUNK)}`;
+  /**
+   * Lay out the instances in visible chunks. Re-laid only when the chunk images flip (the
+   * focus crosses a line at 8 + 16k), the visible set changes, the camera moves to another
+   * LOD cell, or the flora or season changes.
+   */
+  update(fx: number, fz: number, vis: Uint8Array, camX: number, camZ: number): void {
+    let mask = '';
+    for (let i = 0; i < vis.length; i += 16) {
+      let w = 0;
+      for (let j = 0; j < 16; j++) w = (w << 1) | (vis[i + j] ? 1 : 0);
+      mask += w.toString(36) + '.';
+    }
+    const key = `${Math.floor((fx - CHUNK / 2) / CHUNK)},${Math.floor((fz - CHUNK / 2) / CHUNK)}|${mask}|${Math.round(camX / 4)},${Math.round(camZ / 4)}`;
     if (!this.dirty && key === this.layoutKey) return;
     this.dirty = false;
     this.layoutKey = key;
-    this.rebuild(fx, fz);
+    this.rebuild(fx, fz, vis, camX, camZ);
   }
 
-  private rebuild(fx: number, fz: number): void {
+  private rebuild(fx: number, fz: number, vis: Uint8Array, camX: number, camZ: number): void {
     const S = this.S, se = Math.max(0, this.season);
-    const counts = [0, 0, 0];
+    const counts = [0, 0, 0], farCounts = [0, 0, 0];
     let nf = 0, nr = 0;
     const half = CHUNK / 2;
     for (let y = 0; y < N; y++)
       for (let x = 0; x < N; x++) {
         const t = idx(x, y), tree = S.tree[t]!, flower = S.flower[t]!, rock = S.rock[t]!;
         if (!tree && !flower && !rock) continue;
+        if (!vis[((y / CHUNK) | 0) * CHUNKS + ((x / CHUNK) | 0)]) continue;
         // place with the tile's chunk, exactly as the terrain does
         const ccx = x - (x % CHUNK) + half, ccz = y - (y % CHUNK) + half;
         const ox = fx + wd(fx, ccx) - ccx, oz = fz + wd(fz, ccz) - ccz;
         const h = hash2(x, y);
         if (tree) {
-          const k = tree - 1, K = this.kinds[k]!, i = counts[k]!++;
+          const k = tree - 1, K = this.kinds[k]!;
           const px = x + 0.5 + ((h % 37) / 37 - 0.5) * 0.36, pz = y + 0.5 + (((h >>> 6) % 37) / 37 - 0.5) * 0.36;
           const sc = 0.85 + ((h >>> 12) % 31) / 100;
           q4.setFromAxisAngle(up, ((h >>> 3) % 628) / 100);
           m4.compose(v3.set(ox + px, surfaceY(S, px, pz) - 0.04, oz + pz), q4, s3.set(sc, sc * (0.92 + ((h >>> 17) % 17) / 100), sc));
-          K.canopy.setMatrixAt(i, m4);
-          K.trunk.setMatrixAt(i, m4);
           const pal = k === 1 ? PINE[se]! : LEAF[se]!;
           // blossom (index 3 of spring) is rare
           const ci = k !== 1 && se === 0 ? ((h >>> 9) % 23 === 0 ? 3 : (h >>> 9) % 3) : (h >>> 9) % pal.length;
-          K.canopy.setColorAt(i, pal[ci]!);
+          if (Math.hypot(ox + px - camX, oz + pz - camZ) > LOD_DIST) {
+            const i = farCounts[k]!++;
+            K.far.setMatrixAt(i, m4);
+            K.far.setColorAt(i, pal[ci]!);
+          } else {
+            const i = counts[k]!++;
+            K.canopy.setMatrixAt(i, m4);
+            K.trunk.setMatrixAt(i, m4);
+            K.canopy.setColorAt(i, pal[ci]!);
+          }
         }
         if (flower && se !== 3 && ((h >>> 20) % 100) / 100 < this.q.flowers) {
           for (let j = 0; j < 3; j++) {
@@ -181,7 +211,9 @@ export class Flora {
         m.count = counts[k]!;
         m.instanceMatrix.needsUpdate = true;
       }
-      if (K.canopy.instanceColor) K.canopy.instanceColor.needsUpdate = true;
+      K.far.count = farCounts[k]!;
+      K.far.instanceMatrix.needsUpdate = true;
+      for (const m of [K.canopy, K.far]) if (m.instanceColor) m.instanceColor.needsUpdate = true;
     });
     this.flowers.count = nf;
     this.rocks.count = nr;
