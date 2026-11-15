@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#5b3a26">
+<meta name="description" content="Hearthvale: a cosy 3D god game. Shape a little planet, guide your tribe with your hand and raise a god pet.">
+<title>Hearthvale</title>
+</head>
+<body>
+<canvas id="cv" tabindex="0" aria-label="The world of Hearthvale"></canvas>
+<div id="loading">Hearthvale…</div>
+<div id="left">
+ <div id="hud" class="panel">
+  <h1>Hearthvale</h1>
+  <div class="row"><span>Faith</span><b id="hf">0</b></div>
+  <div class="row"><span>Food</span><b id="hfo">0</b></div>
+  <div class="row"><span>Wood</span><b id="hwo">0</b></div>
+  <div class="row"><span id="hd">Day 1</span><b id="hs">Spring</b></div>
+ </div>
+</div>
+<div id="right">
+ <div id="top">
+  <button class="btn" id="bMenu" aria-expanded="false">Menu</button>
+  <button class="btn" id="bPause">Pause</button>
+  <button class="btn" id="bSpeed">1×</button>
+  <button class="btn" id="bHelp">Help</button>
+  <button class="btn" id="bNew">New world</button>
+ </div>
+</div>
+<div id="desc" class="panel"></div>
+<div id="bar" class="panel"></div>
+<div id="toast" class="panel" role="status" aria-live="polite"></div>
+<div id="stats" class="panel"></div>
+
+<div id="help" class="modal"><div class="card panel">
+ <h2>Welcome to Hearthvale</h2>
+ <p>You are the gentle spirit of a little round world. This early build lets you shape the land; villagers, your hand and your god pet arrive in the next phases.</p>
+ <ul>
+  <li><b>Raise and Lower</b> (<kbd>2</kbd> <kbd>3</kbd>): click to lift land, right-click anywhere to sink it. Hold to keep going. Neighbouring points never differ by more than one step, so the land slides into gentle slopes.</li>
+  <li><b>Hand</b> (<kbd>1</kbd>): drag the land to look around.</li>
+  <li>The world is a planet: travel far enough and you come back round. Drag to pan, scroll to zoom, <kbd>Q</kbd> <kbd>E</kbd> to turn, <kbd>WASD</kbd> to pan, <kbd>Space</kbd> to pause. Right-drag or middle-drag also turns the view.</li>
+  <li>On a phone: drag to look, pinch to zoom, twist two fingers to turn.</li>
+ </ul>
+ <p><a href="./legacy/">Play the original 2D prototype</a></p>
+ <div class="acts"><button class="btn go" id="bStart">Begin</button></div>
+</div></div>
+
+<div id="conf" class="modal"><div class="card panel">
+ <h2>Start a new world?</h2>
+ <p>Your current world will be replaced by a fresh one.</p>
+ <div class="acts"><button class="btn go" id="bYes">New world</button><button class="btn" id="bNo">Keep this one</button></div>
+</div></div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
