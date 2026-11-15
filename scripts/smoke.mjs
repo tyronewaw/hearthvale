@@ -44,20 +44,22 @@ try {
   await desk.screenshot({ path: 'shots/desktop-start.png' });
 
   // Real pointer input: click raises land at the centre of the screen.
+  await desk.evaluate(() => window.__hv.setTool('raise'));
   const before = await desk.evaluate(() => { const s = window.__hv.sim().S; return Array.from(s.h).reduce((a, b) => a + b, 0); });
-  await desk.mouse.move(640, 400);
+  // (off-centre: the Hearth sits at the centre, and reshaping its tile would knock it down)
+  await desk.mouse.move(960, 260);
   await frames(desk);
   for (let i = 0; i < 4; i++) { await desk.mouse.down(); await desk.mouse.up(); await frames(desk, 2); }
-  await desk.mouse.click(640, 400, { button: 'right' });
+  await desk.mouse.click(960, 260, { button: 'right' });
   const after = await desk.evaluate(() => { const s = window.__hv.sim().S; return Array.from(s.h).reduce((a, b) => a + b, 0); });
   if (!(after > before)) errors.push(`desktop: clicking did not raise land (${before} -> ${after})`);
 
   // Sculpt a hill and a flat terrace with the sim API, then look at it.
   await desk.evaluate(() => {
     const hv = window.__hv, [sx, sy] = hv.sim().S.start;
-    for (let i = 0; i < 6; i++) hv.use('raise', sx + 6, sy + 3);
-    for (let i = 0; i < 4; i++) hv.use('lower', sx - 5, sy + 6);
-    hv.sim().useTool('flat', sx + 6, sy - 6);
+    // (far enough from the Hearth that the cascade can't reach its tile)
+    for (let i = 0; i < 6; i++) hv.use('raise', sx + 13, sy + 4);
+    for (let i = 0; i < 4; i++) hv.use('lower', sx - 10, sy + 9);
   });
   await frames(desk, 4);
   await desk.screenshot({ path: 'shots/desktop-sculpted.png' });
@@ -100,6 +102,53 @@ try {
     await shot(desk, name, ({ day, tod }) => { window.__hv.sim().S.t = (day + tod) * 150; }, { day, tod });
   }
   void at;
+
+  // ---------- village ----------
+  await desk.evaluate(() => {
+    const hv = window.__hv, sim = hv.sim(), S = sim.S, [sx, sy] = S.start;
+    sim.sandbox = true;
+    S.t = 150 * 0.3;
+    hv.ff(150 * 3);
+    // a farm and a lumber camp go up near the Hearth (still building when we look)
+    for (const [k, dx, dy] of [['farm', 5, 0], ['lumber', -5, 2], ['shrine', 0, 6]]) {
+      outer: for (let r = 0; r < 6; r++) for (let a = 0; a < 8; a++) {
+        if (sim.build(k, sx + dx + Math.round(Math.cos(a) * r), sy + dy + Math.round(Math.sin(a) * r))) break outer;
+      }
+    }
+    hv.ff(40);
+    const r = hv.rig; r.fx = sx + 0.5; r.fz = sy + 0.5; r.zoom = 0.22; r.yaw = 0.7; r.apply();
+    window.__village = { homes: S.homes.length, pop: S.popNow, vills: S.vills.length, structs: S.structs.map((s) => s.k).join(',') };
+  });
+  const village = await desk.evaluate(() => window.__village);
+  console.log('village after 3 days', village);
+  if (!village.homes) errors.push('village: no homes after 3 days');
+  if (!village.structs.includes('hearth')) errors.push('village: the Hearth is gone');
+  await shot(desk, 'village-noon', () => { const S = window.__hv.sim().S; S.t = Math.floor(S.t / 150) * 150 + 0.45 * 150; });
+  await shot(desk, 'village-night', () => { const S = window.__hv.sim().S; S.t = Math.floor(S.t / 150) * 150 + 0.9 * 150; });
+  await desk.evaluate(() => { const S = window.__hv.sim().S; S.t = Math.floor(S.t / 150) * 150 + 1.45 * 150; });
+  await frames(desk, 3);
+
+  // The hand: grab a real villager with the mouse and carry them.
+  await desk.evaluate(() => window.__hv.setTool('hand'));
+  const target = await desk.evaluate(() => {
+    const hv = window.__hv, d = hv.renderer.villagers.drawn.find((x) => x.v.type !== 'resident') ?? hv.renderer.villagers.drawn[0];
+    if (!d) return null;
+    const p = d.p.clone().project(hv.rig.camera);
+    return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight, drops: hv.sim().S.stat.drops };
+  });
+  if (!target) errors.push('hand: no villager on screen to grab');
+  else {
+    await desk.mouse.move(target.x, target.y);
+    await frames(desk, 2);
+    await desk.mouse.down();
+    const held = await desk.evaluate(() => window.__hv.sim().S.held?.k ?? null);
+    for (let i = 1; i <= 8; i++) await desk.mouse.move(target.x + i * 12, target.y + i * 6);
+    await frames(desk, 2);
+    await desk.screenshot({ path: 'shots/hand-carry.png' });
+    await desk.mouse.up();
+    const drops = await desk.evaluate(() => window.__hv.sim().S.stat.drops);
+    if (held !== 'v' || drops !== target.drops + 1) errors.push(`hand: grab/drop failed (held=${held}, drops ${target.drops} -> ${drops})`);
+  }
   await desk.close(); // software WebGL is CPU-bound: keep one page rendering at a time
 
   // ---------- phone ----------

@@ -16,6 +16,10 @@
   <div class="row"><span>Faith</span><b id="hf">0</b></div>
   <div class="row"><span>Food</span><b id="hfo">0</b></div>
   <div class="row"><span>Wood</span><b id="hwo">0</b></div>
+  <div class="row"><span>Villagers</span><b id="hp">0</b></div>
+  <div class="meter" id="hpm" title="Progress to the goal"><i id="hpb"></i></div>
+  <div class="row opt"><span>Homes</span><b id="hh">0</b></div>
+  <div class="row opt"><span>Wanderers</span><b id="hw">0</b></div>
   <div class="row"><span id="hd">Day 1</span><b id="hs">Spring</b></div>
  </div>
 </div>
@@ -28,19 +32,22 @@
   <button class="btn" id="bNew">New world</button>
  </div>
 </div>
+<div id="sub" class="panel"></div>
 <div id="desc" class="panel"></div>
 <div id="bar" class="panel"></div>
 <div id="toast" class="panel" role="status" aria-live="polite"></div>
 <div id="stats" class="panel"></div>
+<div id="tip" class="panel"></div>
 
 <div id="help" class="modal"><div class="card panel">
  <h2>Welcome to Hearthvale</h2>
- <p>You are the gentle spirit of a little round world. This early build lets you shape the land; villagers, your hand and your god pet arrive in the next phases.</p>
+ <p>You are the gentle spirit of a little round world and its blue tribe. Shape the land, guide your people with your hand, and watch the village grow.</p>
  <ul>
-  <li><b>Raise and Lower</b> (<kbd>2</kbd> <kbd>3</kbd>): click to lift land, right-click anywhere to sink it. Hold to keep going. Neighbouring points never differ by more than one step, so the land slides into gentle slopes.</li>
-  <li><b>Hand</b> (<kbd>1</kbd>): drag the land to look around.</li>
-  <li>The world is a planet: travel far enough and you come back round. Drag to pan, scroll to zoom, <kbd>Q</kbd> <kbd>E</kbd> to turn, <kbd>WASD</kbd> to pan, <kbd>Space</kbd> to pause. Right-drag or middle-drag also turns the view.</li>
-  <li>On a phone: drag to look, pinch to zoom, twist two fingers to turn.</li>
+  <li><b>Raise and Lower</b> (<kbd>2</kbd> <kbd>3</kbd>): click to lift land, right-click anywhere to sink it, and hold to keep going. Villagers settle on flat land, and the more flat open land around a home, the bigger it grows: tepee, hut, round hut, big hut, longhouse, great lodge.</li>
+  <li><b>The Hand</b> (<kbd>1</kbd>): grab villagers, trees and rocks and drop them somewhere new. Drop a villager on a building to give them that job; drop trees on the Hearth for wood. Drag empty land to look around.</li>
+  <li><b>Build</b> (<kbd>4</kbd>): farms, lumber camps, fishing huts and shrines cost wood. Builders from the Hearth put them up faster.</li>
+  <li><b>Totem</b> (<kbd>5</kbd>): wanderers head there to look for land.</li>
+  <li>The world is a planet: travel far enough and you come back round. Scroll to zoom, <kbd>Q</kbd> <kbd>E</kbd> or right-drag to turn, <kbd>WASD</kbd> to pan, <kbd>Space</kbd> to pause. Your world saves itself in this browser.</li>
  </ul>
  <p><a href="./legacy/">Play the original 2D prototype</a></p>
  <div class="acts"><button class="btn go" id="bStart">Begin</button></div>

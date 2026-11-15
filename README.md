@@ -10,7 +10,7 @@ It is being rebuilt in phases, and each phase ends playable.
 
 1. ✅ Curved wrap-around terrain and land editing
 2. ✅ Water, sky, day/night, seasons, shadows, trees
-3. Huts, villagers, growth and economy
+3. ✅ Huts, villagers, growth and economy
 4. The god hand with physics grab and throw
 5. The god pet: needs, habits, teaching, tricks
 6. Blessings, quests, full UI, sound, saves
@@ -18,10 +18,11 @@ It is being rebuilt in phases, and each phase ends playable.
 8. Installable PWA
 
 ## Controls (so far)
-- **Raise / Lower** (`2` / `3`): click to lift land, right-click to sink it, and hold to repeat.
-- **Hand** (`1`): drag the land to look around.
-- Wheel to zoom, `Q`/`E` or right-drag to turn, `WASD` to pan, `Space` to pause.
-- Touch: drag to look, pinch to zoom, twist with two fingers to turn.
+- **Hand** (`1`): grab villagers, trees and rocks and drop them somewhere new. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.
+- **Raise / Lower** (`2` / `3`): click to lift land, right-click to sink it, and hold to repeat. Homes grow with the flat land around them.
+- **Build** (`4`): Hearth, Farm, Lumber camp, Fishing hut, Shrine (they cost wood).
+- **Totem** (`5`): wanderers head there to look for land.
+- Wheel to zoom, `Q`/`E` or right-drag to turn, `WASD` to pan, `Space` to pause. The world saves itself in your browser.
 
 ## Develop
 ```bash
@@ -29,6 +30,7 @@ npm install
 npm run dev      # http://localhost:5173  (try ?sandbox&stats, ?q=low|medium|high)
 npm run check    # typecheck + unit tests
 npm run smoke    # build + headless browser play-through + screenshots in shots/
+npm run balance  # 30-day scripted play-through, growth table in shots/balance.txt
 ```
 
 See `CLAUDE.md` for the architecture and `ASSETS.md` for licences.

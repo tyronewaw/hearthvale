@@ -1,5 +1,5 @@
 import { Vector2, type Vector3 } from 'three';
-import type { ToolId } from '../sim/sim';
+import type { ToolId } from '../sim/defs';
 import { wd, wrap, type State } from '../sim/world';
 import type { CameraRig } from '../render/camera-rig';
 import { pickGround, type GroundHit } from './picking';
@@ -8,8 +8,12 @@ export interface ControlsHost {
   state(): State;
   tool(): ToolId;
   setTool(id: ToolId): void;
-  /** Apply a terrain tool at a vertex. */
-  act(id: ToolId, vx: number, vz: number): void;
+  /** Apply the tool at the pointed ground (terrain tools use the vertex, building the tile). */
+  act(id: ToolId, hit: GroundHit): void;
+  /** Try to pick something up with the hand at a screen point. True if something was grabbed. */
+  tryGrab(clientX: number, clientY: number): boolean;
+  /** Let go of what the hand holds at this ground point. */
+  drop(hit: GroundHit | null): void;
   togglePause(): void;
   toggleHelp(): void;
 }
@@ -25,7 +29,7 @@ interface Drag {
   rep: boolean;
   /** Wrapped world point held under the pointer while panning. */
   grab: { x: number; z: number } | null;
-  mode: 'pan' | 'orbit' | null;
+  mode: 'pan' | 'orbit' | 'carry' | null;
 }
 
 interface Pinch {
@@ -36,7 +40,7 @@ interface Pinch {
   grab: { x: number; z: number } | null;
 }
 
-const KEY_TOOLS: Record<string, ToolId> = { '1': 'hand', '2': 'raise', '3': 'lower' };
+const KEY_TOOLS: Record<string, ToolId> = { '1': 'hand', '2': 'raise', '3': 'lower', '4': 'build', '5': 'totem' };
 const HOLD_DELAY = 380;
 const HOLD_EVERY = 140;
 
@@ -81,8 +85,13 @@ export class Controls {
     addEventListener('blur', () => this.keys.clear());
   }
 
+  /** Panning or turning the camera (not carrying). */
   get dragging(): boolean {
-    return !!(this.drag?.moved || this.pinch);
+    return !!((this.drag?.moved && this.drag.mode !== 'carry') || this.pinch);
+  }
+
+  get carrying(): boolean {
+    return this.drag?.mode === 'carry';
   }
 
   private toNdc(x: number, y: number): Vector2 {
@@ -122,6 +131,10 @@ export class Controls {
       x: e.clientX, y: e.clientY, btn: e.button, pt: e.pointerType, moved: false,
       t0: performance.now(), last: 0, rep: false, grab: null, mode: null,
     };
+    if (e.button === 0 && this.host.tool() === 'hand' && this.host.tryGrab(e.clientX, e.clientY)) {
+      this.drag.mode = 'carry';
+      this.drag.moved = true;
+    }
   }
 
   private move(e: PointerEvent): void {
@@ -143,7 +156,9 @@ export class Controls {
           d.grab = p ? { x: wrap(p.x), z: wrap(p.z) } : null;
         } else d.mode = 'orbit';
       }
-      if (d.moved && d.mode === 'pan' && d.grab) this.panTo(d.grab, e.clientX, e.clientY);
+      if (d.mode === 'carry') {
+        /* the held thing follows the hover point */
+      } else if (d.moved && d.mode === 'pan' && d.grab) this.panTo(d.grab, e.clientX, e.clientY);
       else if (d.moved && d.mode === 'orbit') {
         this.rig.yaw -= (e.movementX || 0) * 0.008;
         this.rig.zoom += (e.movementY || 0) * 0.003;
@@ -170,14 +185,20 @@ export class Controls {
     }
     const d = this.drag;
     this.drag = null;
+    if (d?.mode === 'carry') {
+      this.pointer = { x: e.clientX, y: e.clientY };
+      this.updateHover();
+      this.host.drop(this.hover);
+      return;
+    }
     if (!d || cancel || d.moved || d.rep) return;
     this.pointer = { x: e.clientX, y: e.clientY };
     this.updateHover();
     const h = this.hover;
     if (!h) return;
     const tool = this.host.tool();
-    if (d.btn === 2) this.host.act('lower', h.vx, h.vz);
-    else if (d.btn === 0 && (tool === 'raise' || tool === 'lower')) this.host.act(tool, h.vx, h.vz);
+    if (d.btn === 2) this.host.act('lower', h);
+    else if (d.btn === 0 && tool !== 'hand') this.host.act(tool, h);
     if (e.pointerType !== 'mouse') {
       // no hover on touch screens once the finger lifts
       this.pointer = null;
@@ -250,7 +271,7 @@ export class Controls {
       d.last = now;
       d.rep = true;
       this.updateHover();
-      if (this.hover) this.host.act(d.btn === 2 ? 'lower' : tool, this.hover.vx, this.hover.vz);
+      if (this.hover) this.host.act(d.btn === 2 ? 'lower' : tool, this.hover);
     }
   }
 }

@@ -1,17 +1,19 @@
-import { TOOLS, type ToolId } from '../sim/sim';
+import { BALANCE } from '../sim/balance';
+import { STRUCTS, STRUCT_KINDS, TOOLS, type StructKind, type ToolId } from '../sim/defs';
 import { DAY, SEASONS, season, tod, type State } from '../sim/world';
-import { icon } from './icons';
+import { icon, structIcon } from './icons';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export interface UiHandlers {
   pickTool(id: ToolId): void;
+  pickStruct(k: StructKind): void;
   togglePause(): boolean;
   cycleSpeed(): number;
   newWorld(): void;
 }
 
-/** The HTML overlay: HUD, toolbar, toasts and modals. Reads sim state, never writes it. */
+/** The HTML overlay: HUD, toolbar, toasts, tooltips and modals. Reads sim state, never writes it. */
 export class Ui {
   private toastQ: string[] = [];
   private toastOn = false;
@@ -53,15 +55,25 @@ export class Ui {
     $('bPause').textContent = p ? 'Play' : 'Pause';
   }
 
-  drawBar(tool: ToolId): void {
-    const bar = $('bar');
-    bar.innerHTML = TOOLS.map((t, i) =>
-      `<button class="tool${t.id === tool ? ' on' : ''}" id="t-${t.id}" title="${t.name} (key ${i + 1})">` +
-      `<img alt="" src="${icon(t.id)}"><span>${t.name}</span><em>${t.cost ? t.cost + ' faith' : 'free'}</em></button>`,
-    ).join('');
+  drawBar(tool: ToolId, bsel: StructKind, best: number): void {
+    $('bar').innerHTML = TOOLS.map((t, i) => {
+      const lk = best < t.need;
+      const cost = lk ? 'at ' + t.need + ' villagers' : t.cost ? t.cost + ' faith' : t.id === 'build' ? 'wood' : 'free';
+      return `<button class="tool${t.id === tool ? ' on' : ''}${lk ? ' locked' : ''}" id="t-${t.id}" title="${t.name} (key ${(i + 1) % 10})">` +
+        `<img alt="" src="${icon(t.id)}"><span>${t.name}</span><em>${cost}</em></button>`;
+    }).join('');
     for (const t of TOOLS) $('t-' + t.id).onclick = () => this.h.pickTool(t.id);
+    const sub = $('sub');
+    sub.classList.toggle('show', tool === 'build');
+    sub.innerHTML = STRUCT_KINDS.map((k) =>
+      `<button class="tool${k === bsel ? ' on' : ''}" id="s-${k}"><img alt="" src="${structIcon(k)}"><span>${STRUCTS[k].name}</span>` +
+      `<em>${STRUCTS[k].wood ? STRUCTS[k].wood + ' wood' : 'free'}</em></button>`,
+    ).join('');
+    for (const k of STRUCT_KINDS) $('s-' + k).onclick = () => this.h.pickStruct(k);
     const T = TOOLS.find((t) => t.id === tool)!;
-    $('desc').textContent = `${T.name} · ${T.cost ? T.cost + ' faith' : 'free'}. ${T.desc}`;
+    $('desc').textContent = tool === 'build'
+      ? `Build ${STRUCTS[bsel].name} · ${STRUCTS[bsel].wood ? STRUCTS[bsel].wood + ' wood' : 'free'}. ${STRUCTS[bsel].desc}`
+      : `${T.name} · ${T.cost ? T.cost + ' faith' : 'free'}. ${best < T.need ? 'Unlocks at ' + T.need + ' villagers.' : T.desc}`;
   }
 
   /** Refresh the HUD numbers (throttled to 4 Hz). */
@@ -69,11 +81,29 @@ export class Ui {
     if ((this.hudT -= rdt) > 0) return;
     this.hudT = 0.25;
     $('hf').textContent = String(Math.floor(S.faith));
-    $('hfo').textContent = String(Math.floor(S.food));
+    $('hfo').textContent = Math.floor(S.food) + (S.food <= 0 ? ' (hungry)' : '');
     $('hwo').textContent = String(Math.floor(S.wood));
+    $('hp').textContent = String(S.popNow);
+    $('hpb').style.width = Math.min(100, (S.popNow / BALANCE.goal) * 100) + '%';
+    $('hpm').title = `Progress to ${BALANCE.goal} villagers`;
+    $('hh').textContent = String(S.homes.length);
+    $('hw').textContent = String(S.vills.filter((v) => v.type === 'settler').length);
     const t = tod(S.t);
     $('hd').textContent = `Day ${Math.floor(S.t / DAY) + 1}`;
     $('hs').textContent = `${SEASONS[season(S.t)]}, ${t < 0.22 || t > 0.8 ? 'night' : t < 0.5 ? 'morning' : t < 0.68 ? 'afternoon' : 'evening'}`;
+  }
+
+  /** Show a tooltip near the pointer, or hide it with html = null. */
+  tip(html: string | null, x = 0, y = 0): void {
+    const el = $('tip');
+    if (!html) {
+      el.style.display = 'none';
+      return;
+    }
+    el.innerHTML = html;
+    el.style.display = 'block';
+    el.style.left = Math.max(8, Math.min(innerWidth - Math.min(290, innerWidth - 16), x + 22)) + 'px';
+    el.style.top = Math.max(8, y - 80) + 'px';
   }
 
   toast(m: string): void {
