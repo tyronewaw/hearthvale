@@ -132,10 +132,13 @@ try {
   await desk.evaluate(() => window.__hv.setTool('hand'));
   await desk.waitForFunction(() => window.__hv.physicsReady(), null, { timeout: 30000 });
   const findVillager = () => desk.evaluate(() => {
-    const hv = window.__hv, d = hv.renderer.villagers.drawn.find((x) => (x.v.type === 'settler' || x.v.type === 'worker') && x.v.dizzy <= 0) ?? hv.renderer.villagers.drawn[0];
+    // only villagers in the open middle of the screen, away from the HUD, quest and pet panels
+    const hv = window.__hv, scr = (d) => { const p = d.p.clone().project(hv.rig.camera); return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight }; };
+    const ok = (d) => { const p = scr(d); return p.x > 320 && p.x < 960 && p.y > 140 && p.y < 600; };
+    const d = hv.renderer.villagers.drawn.find((x) => (x.v.type === 'settler' || x.v.type === 'worker') && x.v.dizzy <= 0 && ok(x)) ?? hv.renderer.villagers.drawn.find(ok);
     if (!d) return null;
-    const p = d.p.clone().project(hv.rig.camera);
-    return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight, id: d.v.id, vx: d.v.x, vz: d.v.y, stat: { ...hv.sim().S.stat } };
+    const p = scr(d);
+    return { x: p.x, y: p.y, id: d.v.id, vx: d.v.x, vz: d.v.y, stat: { ...hv.sim().S.stat } };
   });
   /** Villagers keep walking: re-aim at the same one just before pressing, and retry. */
   const grabVillager = async () => {
@@ -205,8 +208,11 @@ try {
         const dx = ((v.x - t.vx + 192) % 128) - 64, dz = ((v.y - t.vz + 192) % 128) - 64;
         return Math.hypot(dx, dz);
       }, target);
-      console.log('thrown villager flew', moved.toFixed(1), 'tiles');
-      if (moved < 3) errors.push(`hand: throw too short (${moved})`);
+      if (moved < 0) console.log('thrown villager landed on a home and moved in');
+      else {
+        console.log('thrown villager flew', moved.toFixed(1), 'tiles');
+        if (moved < 3) errors.push(`hand: throw too short (${moved})`);
+      }
     }
   }
   await desk.mouse.move(640, 420);
@@ -228,6 +234,59 @@ try {
   await phone.waitForTimeout(600);
   await phone.screenshot({ path: 'shots/phone-help.png' });
   await phoneCtx.close();
+
+  // ---------- blessings, quests ----------
+  {
+    const pg = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    watch(pg, 'blessings');
+    await pg.goto(`${BASE}/?seed=42&nohelp&sandbox&nopet`);
+    await pg.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
+    const cast = await pg.evaluate(() => {
+      const hv = window.__hv, sim = hv.sim(), S = sim.S, [sx, sy] = S.start;
+      hv.ff(150 * 2.2);
+      const res = {
+        bloom: sim.useTool('bloom', sx + 9, sy - 3), flat: sim.useTool('flat', sx - 8, sy - 8), rain: sim.useTool('rain', sx + 1, sy + 1),
+        isle: sim.useTool('isle', sx + 14, sy + 10), fest: sim.useTool('fest', sx, sy),
+      };
+      hv.setTool('rain');
+      const r = hv.rig; r.fx = sx + 0.5; r.fz = sy + 0.5; r.zoom = 0.3; r.yaw = 0.7; r.apply();
+      S.t = Math.floor(S.t / 150) * 150 + 0.47 * 150;
+      return { ...res, rains: S.rains.length, fest: S.fest };
+    });
+    console.log('blessings cast', cast);
+    for (const k of ['bloom', 'flat', 'rain', 'isle', 'fest']) if (!cast[k]) errors.push(`blessing ${k} failed`);
+    await pg.mouse.move(700, 380);
+    await frames(pg, 8);
+    await pg.screenshot({ path: 'shots/blessings-day.png' });
+    await pg.evaluate(() => { const S = window.__hv.sim().S; S.t = Math.floor(S.t / 150) * 150 + 0.9 * 150; });
+    await frames(pg, 8);
+    await pg.screenshot({ path: 'shots/blessings-night.png' });
+    const quest = await pg.evaluate(() => document.getElementById('qt').textContent);
+    if (!quest) errors.push('quest panel is empty');
+    await pg.close();
+  }
+
+  // ---------- migrating a save from the 2D prototype ----------
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const leg = await ctx.newPage();
+    watch(leg, 'legacy-save', (t) => /Failed to load resource|ERR_|net::/.test(t));
+    await leg.goto(`${BASE}/legacy/`);
+    await leg.waitForTimeout(1500);
+    await leg.evaluate(() => dispatchEvent(new Event('pagehide'))); // the prototype saves on pagehide
+    const hasV2 = await leg.evaluate(() => !!localStorage.getItem('hearthvale-v2'));
+    if (!hasV2) errors.push('migration: the prototype did not save');
+    const pg = await ctx.newPage();
+    watch(pg, 'migrated');
+    await pg.goto(`${BASE}/?nohelp&nopet&nosave`);
+    await pg.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
+    const m = await pg.evaluate(() => { const S = window.__hv.sim().S; return { hearth: S.structs.some((s) => s.k === 'hearth'), start: S.start, vills: S.vills.length }; });
+    console.log('migrated prototype world', m);
+    if (!m.hearth || m.start[0] < 32 || m.start[0] > 96) errors.push(`migration: unexpected world ${JSON.stringify(m)}`);
+    await pg.waitForTimeout(1200);
+    await pg.screenshot({ path: 'shots/migrated.png' });
+    await ctx.close();
+  }
 
   // ---------- the god pet ----------
   {

@@ -178,6 +178,8 @@ export interface State {
   pet: Pet | null;
   /** Pet droppings that fertilise the ground when they fade. */
   poos: { x: number; y: number; t: number }[];
+  /** Index of the current quest. */
+  q: number;
 }
 
 export const season = (t: number): number => Math.floor(t / DAY / 3) % 4;

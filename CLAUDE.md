@@ -3,7 +3,7 @@
 A cosy 3D god game for the browser, on desktop and phone. It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws) and phase 5 (the god pet). Next: phase 6 (blessings, quests, full UI, sound, v2 save migration).
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Next: phase 7 (performance polish; the user said the game is PC-first, so confirm before more mobile work), then phase 8 (PWA and deploy).
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
@@ -35,7 +35,9 @@ src/sim/      pure game rules. No three, DOM, Math.random or imports from other 
   pet.ts      the god pet (prototype mkPet/startAct/finishAct/stepPet/teach/watchLearn): needs,
               habit-weighted action choice, species help/mischief, tricks, stages, leash, droppings,
               petCatch (trees dropped on it are snacks, gently dropped villagers are playmates)
-  blessings.ts bloom / rain / festival effects (the pet's tricks use them; tools come in phase 6)
+  blessings.ts bloom / rain / festival effects (tools in defs.TOOLS; the pet's tricks use them too)
+  quests.ts   the 13-quest chain (population targets: goal/5 and goal); checked twice a second in tick()
+  migrate.ts  migrateV2(): the prototype's 64² save set into a cleared basin at the planet's centre
   sim.ts      Sim class: tick() = the prototype's update(); commands useTool, build, grab,
               grabTree/Rock, drop, release/landed; events queue (drain() each frame)
 src/render/   three.js only, and it reads sim state
@@ -53,6 +55,7 @@ src/render/   three.js only, and it reads sim state
   villagers.ts per-part instanced villagers (blue tribe), procedural walk/work/wave/sit/swim/held,
               blob shadows, culled to the view, screen-space pick()
   particles.ts pooled particles: lit (smoke, puffs, leaves, splashes) and glowing (sparks, hearts…)
+  effects.ts  rain clouds and streaks, festival bunting and lanterns, fireflies, blessing radius cursor
   pets.ts     PetView: sheep / monkey / chicken built in code, ×0.6 / ×1.15 / ×1.75 by stage, walk
               cycle, bob, squash-and-stretch, eat/sleep/dance/play poses, nature halo, thought bubble
   hand.ts     the god hand: code-built right hand, jointed fingers, blended poses
@@ -65,7 +68,8 @@ src/physics/  physics.ts  Rapier world: 64 chunk heightfields on the torus, thro
   throw.ts    throwVelocity() from the hand's trail; trimTrail()
   ballistic.ts simple arc used before Rapier's WASM loads (and in tests)
 src/input/    controls.ts (pointer, wheel, pinch, twist, keys, hold-to-repeat, carry), picking.ts
-src/ui/       hud.ts (HUD, toolbar, toasts, modals), icons.ts (prototype pixel icons), styles.css,
+src/audio/    audio.ts  synthesised WebAudio sound effects and generative music (ported), Sound toggle
+src/ui/       hud.ts (HUD, quest panel, toolbar, toasts, modals, win), icons.ts (prototype pixel icons), styles.css,
               petcard.ts (pet card + choose screen; portraits are the prototype's pixel pets)
 src/main.ts   bootstrap, fixed-tick loop with speed ×1/2/4, event routing, window.__hv debug hook
 scripts/smoke.mjs  Playwright smoke test
@@ -113,6 +117,10 @@ legacy/       the 2D prototype (design reference; do not edit)
   - Leash: Free / Follow (walks to `sim.handGround`, set each frame from the hover point) / Stay / Send (pick a spot).
   - Monkey mischief flings villagers through a `launch` event that physics flies. Those landings are `quiet` and don't count as the player's throws.
   - New worlds open the choose screen after the help.
+- **Blessings** keep the prototype's costs and unlocks (Bloom 15 faith at 25 villagers, Level 20 at 60, Rain 30 at 110, Rise 40 at 180, Festival 80 at 280). Casting Bloom, Rain or Festival near the pet (within 10 tiles) teaches it. Keys 6–0.
+- **Quests** are the prototype's chain. "A real village" asks for goal/5 (200) and the last quest for the goal (1000). Each gives faith, and finishing them all shows the win screen (play continues).
+- **The prototype's save is migrated** when there's no 3D save but `hearthvale-v2` exists. Its 64×64 island (65² vertices) is set into a cleared sea basin at offset 32 on a freshly generated planet, and the v2 save is left untouched. The smoke test does this end to end: it plays `/legacy/`, which saves on pagehide, then loads `/`.
+- **Sound** is fully synthesised (no audio files), so there are no licences to track. It's unlocked on the first pointer or key press, and the on/off setting is saved in localStorage (`hearthvale-sound`).
 - **Gravity is 14 u/s²** (1 unit ≈ a villager's height × 2): snappy arcs, not floaty.
 - **Budgets (smoke test, 1280×800, village of about 90 people):** high 116 draw calls and ~430k triangles; medium and low 96 calls and ~250k. The hand adds about 17 draw calls (plus its shadow passes) while it is on screen.
 - **WebGPU is deferred.** The bend uses `onBeforeCompile`, which WebGPURenderer doesn't support (it needs TSL).

@@ -4,6 +4,9 @@ import './ui/styles.css';
 import { Vector3 } from 'three';
 import { BMAX, BN, BTH, ROLE_NAME, STRUCTS, type StructKind, type ToolId } from './sim/defs';
 import { SAVE_KEY, deserialize, serialize } from './sim/save';
+import { V2_KEY, migrateV2 } from './sim/migrate';
+import { Audio } from './audio/audio';
+import { TOOL } from './sim/defs';
 import { Sim } from './sim/sim';
 import { fields, validSite, workersAt } from './sim/village';
 import { DAY, TICK, idx, wd, wrap } from './sim/world';
@@ -53,12 +56,16 @@ const newSeed = () => (Date.now() ^ (Math.random() * 0xffffff)) & 0xffffff;
 const sandbox = params.has('sandbox');
 
 /** Continue the saved world, unless the URL asks for a specific seed or a fresh start. */
-function boot(): { sim: Sim; loaded: boolean } {
+function boot(): { sim: Sim; loaded: boolean; migrated?: boolean } {
   if (!params.has('seed') && !params.has('fresh')) {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       const S = raw ? deserialize(raw) : null;
       if (S) return { sim: new Sim(S), loaded: true };
+      // No 3D save yet, but a world from the 2D prototype? Carry it over (the old save stays).
+      const old = localStorage.getItem(V2_KEY);
+      const M = old ? migrateV2(old) : null;
+      if (M) return { sim: new Sim(M), loaded: true, migrated: true };
     } catch {
       /* private mode etc.: just start fresh */
     }
@@ -102,6 +109,9 @@ let lastGrip: Vector3 | null = null;
 /** The last release, for debugging throw feel (window.__hv.lastThrow()). */
 let lastThrow: unknown = null, carryFrames = 0, noTarget = 0;
 
+const audio = new Audio();
+for (const ev of ['pointerdown', 'keydown'] as const) addEventListener(ev, () => audio.unlock(), { passive: true });
+
 let tool: ToolId = 'hand';
 let bsel: StructKind = 'farm';
 let paused = false;
@@ -116,6 +126,7 @@ const ui = new Ui({
   },
   togglePause,
   cycleSpeed: () => (speed = speed === 1 ? 2 : speed === 2 ? 4 : 1),
+  toggleSound: () => audio.toggle(),
   helpClosed: () => {
     if (!sim.S.pet) petCard.openChoose();
   },
@@ -129,9 +140,11 @@ const ui = new Ui({
     rig.fz = sim.S.start[1] + 0.5;
     rig.apply();
     redrawBar();
+    ui.drawQuest(sim.S);
     save();
   },
 });
+ui.setSound(audio.on);
 
 const petCard = new PetCard({
   choose: (kind, name) => {
@@ -309,6 +322,8 @@ function resize(): void {
 addEventListener('resize', resize);
 resize();
 pickTool(tool);
+ui.drawQuest(sim.S);
+if (booted.migrated) setTimeout(() => ui.toast('Your island from the 2D Hearthvale has been carried over to this world'), 800);
 if (!params.has('nohelp') && !booted.loaded) ui.toggleHelp(true);
 else if (!sim.S.pet && !params.has('nopet')) setTimeout(() => petCard.openChoose(), 200);
 
@@ -387,7 +402,11 @@ function frame(now: number): void {
     else if (e.k === 'launch') launchFromSim(e.obj, e.x, e.z, e.vx, e.vz);
     R.onEvent(e);
     if (e.k === 'toast') ui.toast(e.msg);
-    else if (e.k === 'ui') redrawBar();
+    else if (e.k === 'sfx') audio.sfx(e.id);
+    else if (e.k === 'ui') {
+      redrawBar();
+      ui.drawQuest(sim.S);
+    } else if (e.k === 'win') ui.showWin(e.pop, e.day);
   }
 
   controls.frame(rdt, now);
@@ -419,14 +438,19 @@ function frame(now: number): void {
     trimTrail(trail, now);
   } else trailPrev = null;
   const hover = controls.dragging ? null : controls.hover;
+  const td = TOOL[tool], blessing = !!td && td.r > 0 && hover;
+  const bless = blessing && hover
+    ? { at: { vx: hover.vx, vz: hover.vz }, r: td!.r, square: tool === 'flat', ok: (sandbox || sim.S.best >= td!.need) && (sandbox || sim.S.faith >= td!.cost) }
+    : null;
   const ghost = tool === 'build' && hover
     ? { kind: bsel, tile: [hover.tx, hover.tz] as [number, number], ok: validSite(sim, bsel, hover.tx, hover.tz) && (sandbox || sim.S.wood >= STRUCTS[bsel].wood) }
     : null;
   R.render(now / 1000, {
-    dt: rdt, alpha: paused ? 1 : Math.min(1, acc / TICK), hover, tool, crops: sim.crops, ghost,
+    dt: rdt, alpha: paused ? 1 : Math.min(1, acc / TICK), hover, tool, crops: sim.crops, ghost, bless,
     handTarget: hs.target, handPose: hs.pose, flyers: physics?.poses() ?? [],
   });
   ui.hud(sim.S, rdt);
+  if (!paused) audio.music(rdt, R.sky.night > 0.5, sim.S.fest > 0);
   petCard.update(sim.S, rdt);
   if ((tipT -= rdt) <= 0) {
     tipT = 0.12;

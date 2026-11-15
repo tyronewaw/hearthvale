@@ -13,7 +13,7 @@ It is being rebuilt in phases, and each phase ends playable.
 3. ✅ Huts, villagers, growth and economy
 4. ✅ The god hand with physics grab and throw
 5. ✅ The god pet: needs, habits, teaching, tricks
-6. Blessings, quests, full UI, sound, saves
+6. ✅ Blessings, quests, full UI, sound, saves (old 2D saves carry over)
 7. Mobile polish and performance
 8. Installable PWA
 
@@ -23,7 +23,8 @@ It is being rebuilt in phases, and each phase ends playable.
 - **Build** (`4`): Hearth, Farm, Lumber camp, Fishing hut, Shrine (they cost wood).
 - **Totem** (`5`): wanderers head there to look for land.
 - **Your pet** (sheep, monkey or chicken): click it with the Hand to stroke, right-click to scold, straight after something it did, to teach it. Drop trees on it as snacks. Leash it: Free, Follow, Stay or Send.
-- Wheel to zoom, `Q`/`E` or right-drag to turn, `WASD` to pan, `Space` to pause. The world saves itself in your browser.
+- **Blessings** (`6`–`0`): Bloom, Level, Rain, Rise and Festival unlock as your tribe grows and cost faith.
+- Wheel to zoom, `Q`/`E` or right-drag to turn, `WASD` to pan, `Space` to pause. The world saves itself in your browser, and a world from the 2D prototype carries over.
 
 ## Develop
 ```bash

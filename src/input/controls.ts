@@ -46,7 +46,9 @@ interface Pinch {
   grab: { x: number; z: number } | null;
 }
 
-const KEY_TOOLS: Record<string, ToolId> = { '1': 'hand', '2': 'raise', '3': 'lower', '4': 'build', '5': 'totem' };
+const KEY_TOOLS: Record<string, ToolId> = {
+  '1': 'hand', '2': 'raise', '3': 'lower', '4': 'build', '5': 'totem', '6': 'bloom', '7': 'flat', '8': 'rain', '9': 'isle', '0': 'fest',
+};
 const HOLD_DELAY = 380;
 const HOLD_EVERY = 140;
 

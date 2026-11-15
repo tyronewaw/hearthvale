@@ -14,4 +14,6 @@ export type SimEvent =
   /** A tool unlocked, a quest finished… anything the toolbar should redraw for. */
   | { k: 'ui' }
   /** Something must fly (the monkey flinging a villager): physics or an arc takes it. */
-  | { k: 'launch'; obj: Held; x: number; z: number; vx: number; vz: number };
+  | { k: 'launch'; obj: Held; x: number; z: number; vx: number; vz: number }
+  /** The last quest is done. */
+  | { k: 'win'; pop: number; day: number };

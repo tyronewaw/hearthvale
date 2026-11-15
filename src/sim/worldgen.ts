@@ -53,6 +53,7 @@ export function emptyState(seed: number): State {
     hinted: {},
     pet: null,
     poos: [],
+    q: 0,
   };
 }
 

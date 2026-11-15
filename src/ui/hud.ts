@@ -2,6 +2,7 @@ import { BALANCE } from '../sim/balance';
 import { STRUCTS, STRUCT_KINDS, TOOLS, type StructKind, type ToolId } from '../sim/defs';
 import { DAY, SEASONS, season, tod, type State } from '../sim/world';
 import { icon, structIcon } from './icons';
+import { QUESTS } from '../sim/quests';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -13,6 +14,7 @@ export interface UiHandlers {
   newWorld(): void;
   /** The welcome screen was dismissed (a new player chooses their pet next). */
   helpClosed(): void;
+  toggleSound(): boolean;
 }
 
 /** The HTML overlay: HUD, toolbar, toasts, tooltips and modals. Reads sim state, never writes it. */
@@ -29,6 +31,9 @@ export class Ui {
       $('bSpeed').textContent = this.h.cycleSpeed() + '×';
     };
     $('bHelp').onclick = () => this.toggleHelp(true);
+    $('bSound').onclick = () => this.setSound(this.h.toggleSound());
+    $('bKeep').onclick = () => $('win').classList.remove('show');
+    $('quest').onclick = () => $('quest').classList.toggle('open');
     $('bStart').onclick = () => {
       this.toggleHelp(false);
       this.h.helpClosed();
@@ -54,6 +59,23 @@ export class Ui {
 
   toggleHelp(show?: boolean): void {
     $('help').classList.toggle('show', show);
+  }
+
+  setSound(on: boolean): void {
+    $('bSound').textContent = on ? 'Sound on' : 'Sound off';
+  }
+
+  /** The quest panel: the current quest, or all done. */
+  drawQuest(S: State): void {
+    const done = S.q >= QUESTS.length, Q = QUESTS[Math.min(S.q, QUESTS.length - 1)]!;
+    $('qn').textContent = done ? 'All quests done' : `Quest ${S.q + 1} of ${QUESTS.length}`;
+    $('qt').textContent = done ? 'The valley sings' : Q.t;
+    $('qx').textContent = done ? 'Your world is yours to keep tending.' : Q.x;
+  }
+
+  showWin(pop: number, day: number): void {
+    $('winTxt').textContent = `${pop} villagers now call Hearthvale home, on day ${day}. The little world is yours to keep tending.`;
+    $('win').classList.add('show');
   }
 
   setPaused(p: boolean): void {

@@ -1,9 +1,11 @@
 import { BALANCE } from './balance';
 import { BMAX, STRUCTS, TOOL, TOOLS, type StructKind, type ToolId } from './defs';
 import type { SimEvent } from './events';
+import { bloom, festival, rain } from './blessings';
 import { spreadTrees } from './flora';
+import { QUESTS } from './quests';
 import {
-  PETS, feedPet, mkPet, petCatch, stepPet, stepPoos, teach, type Habit, type Leash, type PetCtx, type PetKind,
+  PETS, feedPet, mkPet, petCatch, stepPet, stepPoos, teach, watchLearn, type Habit, type Leash, type PetCtx, type PetKind,
 } from './pet';
 import { Rng } from './rng';
 import { bump, isWater, level, rise } from './terrain';
@@ -35,7 +37,7 @@ export class Sim implements Ctx, PetCtx {
   handGround: [number, number] | null = null;
   private lastSeason: number;
   /** Countdown timers (not saved, as in the prototype's `tm`). */
-  private tm = { spread: 0, re: 0, res: 0 };
+  private tm = { spread: 0, re: 0, res: 0, q: 0 };
 
   constructor(S: State) {
     this.S = S;
@@ -154,6 +156,22 @@ export class Sim implements Ctx, PetCtx {
           this.emit({ k: 'ui' });
         }
     }
+    // Quests: each finished one gives faith; the last one wins the game (play on after).
+    if ((this.tm.q -= dt) <= 0) {
+      this.tm.q = 0.5;
+      while (S.q < QUESTS.length && QUESTS[S.q]!.ok(S)) {
+        const Q = QUESTS[S.q]!;
+        S.faith = Math.min(999, S.faith + Q.r);
+        this.emit({ k: 'toast', msg: `Quest done: ${Q.t}` + (Q.r ? ` (+${Q.r} faith)` : '') });
+        this.emit({ k: 'sfx', id: 'magic' });
+        S.q++;
+        this.emit({ k: 'ui' });
+        if (S.q === QUESTS.length && !S.won) {
+          S.won = true;
+          this.emit({ k: 'win', pop: S.popNow, day: Math.floor(S.t / 150) + 1 });
+        }
+      }
+    }
     if (!S.hinted.flat && settlers >= 5 && S.homes.length <= 2 && S.t > 150 * 0.5) {
       S.hinted.flat = 1;
       this.emit({ k: 'toast', msg: 'Wanderers need flat land. Raise or lower ground into level patches' });
@@ -190,6 +208,19 @@ export class Sim implements Ctx, PetCtx {
       return true;
     }
     if (!this.sandbox && S.faith < def.cost) return this.pay(def.cost);
+    if (id === 'bloom' || id === 'rain' || id === 'fest') {
+      this.pay(def.cost);
+      if (id === 'bloom') bloom(this, vx, vy, def.r, true);
+      else if (id === 'rain') rain(this, vx, vy);
+      else {
+        festival(this);
+        this.emit({ k: 'toast', msg: 'Festival! Every home grows twice as fast' });
+      }
+      this.emit({ k: 'sfx', id: 'magic' });
+      // the pet watches and learns
+      if (S.pet) watchLearn(this, id, id === 'fest' ? S.pet.x : vx, id === 'fest' ? S.pet.y : vy);
+      return true;
+    }
     const touched = new Set<number>();
     let ok = true;
     if (id === 'raise') ok = bump(S, vx, vy, 1, touched);
