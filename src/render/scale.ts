@@ -15,12 +15,12 @@ export function yOf(level: number): number {
 
 /**
  * Terrain surface height in world units at a fractional tile position, on the same two
- * triangles per tile the renderer draws (split along (x,y)→(x+1,y+1)).
+ * triangles per tile the renderer draws and Rapier uses (split along (x+1,z)→(x,z+1)).
  */
 export function surfaceY(S: State, x: number, z: number): number {
   const x0 = Math.floor(x), z0 = Math.floor(z), fx = x - x0, fz = z - z0, H = S.h;
   const a = yOf(H[idx(x0, z0)]!), b = yOf(H[idx(x0 + 1, z0)]!), c = yOf(H[idx(x0 + 1, z0 + 1)]!), d = yOf(H[idx(x0, z0 + 1)]!);
-  return fx >= fz ? a + (b - a) * fx + (c - b) * fz : a + (c - d) * fx + (d - a) * fz;
+  return fx + fz <= 1 ? a + (b - a) * fx + (d - a) * fz : c + (d - c) * (1 - fx) + (b - c) * (1 - fz);
 }
 
 /** The surface you would stand on: terrain, or the water where it is deeper. */

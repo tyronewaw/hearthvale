@@ -128,27 +128,85 @@ try {
   await desk.evaluate(() => { const S = window.__hv.sim().S; S.t = Math.floor(S.t / 150) * 150 + 1.45 * 150; });
   await frames(desk, 3);
 
-  // The hand: grab a real villager with the mouse and carry them.
+  // The hand: grab a real villager with the mouse; a slow move drops, a flick throws.
   await desk.evaluate(() => window.__hv.setTool('hand'));
-  const target = await desk.evaluate(() => {
-    const hv = window.__hv, d = hv.renderer.villagers.drawn.find((x) => x.v.type !== 'resident') ?? hv.renderer.villagers.drawn[0];
+  await desk.waitForFunction(() => window.__hv.physicsReady(), null, { timeout: 30000 });
+  const findVillager = () => desk.evaluate(() => {
+    const hv = window.__hv, d = hv.renderer.villagers.drawn.find((x) => (x.v.type === 'settler' || x.v.type === 'worker') && x.v.dizzy <= 0) ?? hv.renderer.villagers.drawn[0];
     if (!d) return null;
     const p = d.p.clone().project(hv.rig.camera);
-    return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight, drops: hv.sim().S.stat.drops };
+    return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight, id: d.v.id, vx: d.v.x, vz: d.v.y, stat: { ...hv.sim().S.stat } };
   });
-  if (!target) errors.push('hand: no villager on screen to grab');
+  /** Villagers keep walking: re-aim at the same one just before pressing, and retry. */
+  const grabVillager = async () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const t = await findVillager();
+      if (!t) return null;
+      await desk.mouse.move(t.x, t.y);
+      await frames(desk, 2);
+      const again = await desk.evaluate((id) => {
+        const hv = window.__hv, d = hv.renderer.villagers.drawn.find((x) => x.v.id === id);
+        if (!d) return null;
+        const p = d.p.clone().project(hv.rig.camera);
+        return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight };
+      }, t.id);
+      if (!again) continue;
+      await desk.mouse.move(again.x, again.y);
+      await desk.mouse.down();
+      if ((await desk.evaluate(() => window.__hv.sim().S.held?.k)) === 'v') return { ...t, ...again };
+      await desk.mouse.up();
+      await frames(desk, 3);
+    }
+    return null;
+  };
+  const waitLanded = (key, before) => desk.waitForFunction(([k, b]) => window.__hv.sim().S.stat[k] > b, [key, before], { timeout: 15000 }).then(() => true).catch(() => false);
+  let target = await grabVillager();
+  if (!target) errors.push('hand: could not grab a villager to drop');
   else {
-    await desk.mouse.move(target.x, target.y);
-    await frames(desk, 2);
-    await desk.mouse.down();
-    const held = await desk.evaluate(() => window.__hv.sim().S.held?.k ?? null);
-    for (let i = 1; i <= 8; i++) await desk.mouse.move(target.x + i * 12, target.y + i * 6);
-    await frames(desk, 2);
+    await desk.screenshot({ path: 'shots/hand-reach.png' });
+    for (let i = 1; i <= 6; i++) { await desk.mouse.move(target.x + i * 10, target.y + i * 5); await frames(desk, 2); }
+    await desk.waitForTimeout(300);
     await desk.screenshot({ path: 'shots/hand-carry.png' });
     await desk.mouse.up();
-    const drops = await desk.evaluate(() => window.__hv.sim().S.stat.drops);
-    if (held !== 'v' || drops !== target.drops + 1) errors.push(`hand: grab/drop failed (held=${held}, drops ${target.drops} -> ${drops})`);
+    if (!(await waitLanded('drops', target.stat.drops))) errors.push('hand: dropped villager never landed');
   }
+  // throw: a real-mouse flick (timing-dependent in headless software WebGL, so only logged) …
+  await frames(desk, 10);
+  target = await grabVillager();
+  if (target) {
+    await frames(desk, 3);
+    for (let i = 1; i <= 6; i++) { await desk.mouse.move(target.x - i * 45, target.y - i * 20); await frames(desk, 1); }
+    await desk.mouse.up();
+    await frames(desk, 4);
+    await desk.screenshot({ path: 'shots/hand-throw.png' });
+    const lt = await desk.evaluate(() => window.__hv.lastThrow());
+    console.log('real flick:', lt.thrown ? `thrown at ${Math.hypot(lt.vx, lt.vz).toFixed(1)} u/s` : `read as a drop (${lt.trail.length} trail samples)`);
+  }
+  // … and a deterministic throw through the same physics path, which must fly and land.
+  await frames(desk, 10);
+  target = await grabVillager();
+  if (!target) errors.push('hand: could not grab a villager to throw');
+  else {
+    await desk.evaluate(() => window.__hv.throwHeld(-10, -6));
+    await desk.mouse.up();
+    await frames(desk, 3);
+    await desk.screenshot({ path: 'shots/hand-throw-flight.png' });
+    if (!(await waitLanded('throws', target.stat.throws))) errors.push('hand: thrown villager never landed as a throw');
+    else {
+      const moved = await desk.evaluate((t) => {
+        const S = window.__hv.sim().S, v = S.vills.find((o) => o.id === t.id);
+        if (!v) return -1;
+        const dx = ((v.x - t.vx + 192) % 128) - 64, dz = ((v.y - t.vz + 192) % 128) - 64;
+        return Math.hypot(dx, dz);
+      }, target);
+      console.log('thrown villager flew', moved.toFixed(1), 'tiles');
+      if (moved < 3) errors.push(`hand: throw too short (${moved})`);
+    }
+  }
+  await desk.mouse.move(640, 420);
+  await desk.evaluate(() => window.__hv.setTool('raise'));
+  await frames(desk, 6);
+  await desk.screenshot({ path: 'shots/hand-point.png' });
   await desk.close(); // software WebGL is CPU-bound: keep one page rendering at a time
 
   // ---------- phone ----------

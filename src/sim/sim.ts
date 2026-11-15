@@ -10,7 +10,7 @@ import {
 } from './village';
 import { generateWorld } from './worldgen';
 import {
-  N, TICK, clamp, idx, nightF, season, SEASONS, tdist, wrap, type Home, type State, type Struct, type Vill,
+  N, TICK, clamp, idx, nightF, season, SEASONS, tdist, wrap, type Held, type Home, type State, type Struct, type Vill,
 } from './world';
 
 export type { SimEvent } from './events';
@@ -239,14 +239,21 @@ export class Sim implements Ctx {
     land(this, h, x, y, thrown);
   }
 
-  /** Release the held object into the air: physics (or a test) calls `landed` when it settles. */
-  release(): Exclude<State['held'], null> | null {
+  /**
+   * Let go of the held object into the air. Physics then owns its motion and calls
+   * `landed` when it comes to rest. It counts as part of the village while flying.
+   */
+  release(): Held | null {
     const h = this.S.held;
     this.S.held = null;
+    if (h) this.S.flying.push(h);
     return h;
   }
 
-  landed(obj: Exclude<State['held'], null>, x: number, y: number, thrown: boolean): void {
+  /** A released object has come to rest at (x, y). */
+  landed(obj: Held, x: number, y: number, thrown: boolean): void {
+    const i = this.S.flying.indexOf(obj);
+    if (i >= 0) this.S.flying.splice(i, 1);
     land(this, obj, x, y, thrown);
   }
 

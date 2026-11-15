@@ -11,14 +11,14 @@ It is being rebuilt in phases, and each phase ends playable.
 1. ✅ Curved wrap-around terrain and land editing
 2. ✅ Water, sky, day/night, seasons, shadows, trees
 3. ✅ Huts, villagers, growth and economy
-4. The god hand with physics grab and throw
+4. ✅ The god hand with physics grab and throw
 5. The god pet: needs, habits, teaching, tricks
 6. Blessings, quests, full UI, sound, saves
 7. Mobile polish and performance
 8. Installable PWA
 
 ## Controls (so far)
-- **Hand** (`1`): grab villagers, trees and rocks and drop them somewhere new. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.
+- **Hand** (`1`): grab villagers, trees and rocks. Let go gently to drop, or flick and let go to throw: they arc, bounce, splash and get up a little dizzy. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.
 - **Raise / Lower** (`2` / `3`): click to lift land, right-click to sink it, and hold to repeat. Homes grow with the flat land around them.
 - **Build** (`4`): Hearth, Farm, Lumber camp, Fishing hut, Shrine (they cost wood).
 - **Totem** (`5`): wanderers head there to look for land.

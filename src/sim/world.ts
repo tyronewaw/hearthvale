@@ -158,6 +158,8 @@ export interface State {
   structs: Struct[];
   vills: Vill[];
   held: Held | null;
+  /** Things the hand threw or dropped that are still in the air (physics owns their motion). */
+  flying: Held[];
   totem: [number, number] | null;
   /** Highest population reached (unlocks blessings). */
   best: number;

@@ -15,12 +15,13 @@ export function isWater(S: State, x: number, y: number): boolean {
 
 /**
  * Height at a fractional position, interpolated over the same two triangles the renderer
- * draws (split along the (x,y)→(x+1,y+1) diagonal), so things stand exactly on the surface.
+ * draws and the physics heightfield uses (split along the (x+1,y)→(x,y+1) diagonal), so
+ * things stand exactly on the surface.
  */
 export function hAt(S: State, x: number, y: number): number {
   const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, H = S.h;
   const a = H[idx(x0, y0)]!, b = H[idx(x0 + 1, y0)]!, c = H[idx(x0 + 1, y0 + 1)]!, d = H[idx(x0, y0 + 1)]!;
-  return fx >= fy ? a + (b - a) * fx + (c - b) * fy : a + (c - d) * fx + (d - a) * fy;
+  return fx + fy <= 1 ? a + (b - a) * fx + (d - a) * fy : c + (d - c) * (1 - fx) + (b - c) * (1 - fy);
 }
 
 /** Mark the four tiles that share vertex (vx, vy) as changed. */
