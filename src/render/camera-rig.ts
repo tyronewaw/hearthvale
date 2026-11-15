@@ -8,6 +8,9 @@ import { bend, syncBendUniforms } from './bend';
  * Zoom also tilts the camera and strengthens the planet curve, so zooming out reads as
  * pulling back from a little world.
  */
+/** Debug: ?nobend renders the world flat. */
+const NO_BEND = typeof location !== 'undefined' && new URLSearchParams(location.search).has('nobend');
+
 export class CameraRig {
   readonly camera: PerspectiveCamera;
   fx: number;
@@ -50,7 +53,7 @@ export class CameraRig {
     this.fz = wrap(this.fz);
     this.zoom = clamp(this.zoom, 0, 1);
     bend.focus.set(this.fx, this.fz);
-    bend.k = 0.0032 + 0.0075 * this.zoom * this.zoom;
+    bend.k = NO_BEND ? 0 : 0.0032 + 0.0075 * this.zoom * this.zoom;
     syncBendUniforms();
     const d = this.dist, p = this.pitch, c = this.camera;
     c.position.set(

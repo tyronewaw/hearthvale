@@ -1,3 +1,5 @@
+import { BALANCE } from './balance';
+import { spreadTrees } from './flora';
 import { Rng } from './rng';
 import { bump, level, rise } from './terrain';
 import { generateWorld } from './worldgen';
@@ -6,6 +8,9 @@ import { TICK, clamp, season, SEASONS, type State } from './world';
 /** Messages from the sim to the outside world (renderer, UI, audio). Drained each frame. */
 export type SimEvent =
   | { k: 'terrain'; tiles: number[] }
+  /** Trees, flowers or rocks changed on these tiles (without the ground changing). */
+  | { k: 'flora'; tiles: number[] }
+  | { k: 'season'; season: number }
   | { k: 'toast'; msg: string }
   | { k: 'sfx'; id: string };
 
@@ -35,6 +40,8 @@ export class Sim {
   /** Sandbox mode (URL ?sandbox): tools cost nothing. */
   sandbox = false;
   private lastSeason: number;
+  /** Countdown timers (not saved, as in the prototype's `tm`). */
+  private tm = { spread: 0 };
 
   constructor(S: State) {
     this.S = S;
@@ -53,9 +60,15 @@ export class Sim {
     const se = season(S.t);
     if (se !== this.lastSeason) {
       this.lastSeason = se;
+      this.emit({ k: 'season', season: se });
       this.emit({ k: 'toast', msg: `${SEASONS[se]} arrives` });
     }
-    S.faith = clamp(S.faith + 0.15 * TICK, 0, 999);
+    S.faith = clamp(S.faith + BALANCE.faithBase * TICK, 0, 999);
+    if ((this.tm.spread -= TICK) <= 0) {
+      this.tm.spread = BALANCE.treeSpreadEvery;
+      const grown = spreadTrees(S, this.rng);
+      if (grown.length) this.emit({ k: 'flora', tiles: grown });
+    }
     S.rngState = this.rng.s;
   }
 
