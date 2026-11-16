@@ -17,6 +17,8 @@ interface Model {
   body: BufferGeometry;
   head: BufferGeometry;
   headAt: [number, number, number];
+  /** Babies have big heads. */
+  headScale: number;
   leg: BufferGeometry;
   legs: [number, number][];
   legY: number;
@@ -25,12 +27,25 @@ interface Model {
   top: number;
 }
 
-function sheep(): Model {
-  const W = '#f6f2ea', W2 = '#ddd5c6', K = '#4a3a34', K2 = '#6a5048';
+/**
+ * Each species looks different at each stage (0 baby, 1 young, 2 grand), not just bigger:
+ * a lamb, a sheep and a curly-horned ram with a bell; a baby monkey, a monkey and a grand old
+ * monkey with a crest, white whiskers and a long curled tail; a chick, a hen and a rooster.
+ */
+function sheep(stage: number): Model {
+  const W = stage === 0 ? '#fbf3e4' : '#f6f2ea', W2 = stage === 0 ? '#eadfcb' : '#ddd5c6', K = '#4a3a34', K2 = stage === 0 ? '#e0a49a' : '#6a5048';
   const b = new Kit();
   b.add(new IcosahedronGeometry(0.3, 1), (f) => (f % 5 ? W : W2), { pos: [0, 0.44, 0], scale: [0.95, 0.78, 1.2] });
-  for (const [x, y, z] of [[0.18, 0.55, 0.15], [-0.18, 0.55, 0.12], [0.15, 0.5, -0.2], [-0.16, 0.52, -0.18], [0, 0.66, 0]])
-    b.add(new IcosahedronGeometry(0.15, 0), W, { pos: [x!, y!, z!] });
+  const puffs: [number, number, number][] = stage === 0
+    ? [[0.12, 0.6, 0.05], [-0.12, 0.6, -0.05]]
+    : [[0.18, 0.55, 0.15], [-0.18, 0.55, 0.12], [0.15, 0.5, -0.2], [-0.16, 0.52, -0.18], [0, 0.66, 0]];
+  if (stage === 2) puffs.push([0.22, 0.42, 0], [-0.22, 0.42, 0], [0, 0.62, 0.22], [0, 0.6, -0.26], [0.1, 0.7, -0.1], [-0.1, 0.7, 0.1]);
+  for (const [x, y, z] of puffs) b.add(new IcosahedronGeometry(stage === 2 ? 0.17 : 0.15, 0), W, { pos: [x, y, z] });
+  if (stage === 2) {
+    // a red collar with a golden bell
+    b.add(new TorusGeometry(0.1, 0.02, 4, 12), '#c94a3a', { pos: [0, 0.5, 0.33] });
+    b.add(new CylinderGeometry(0.035, 0.05, 0.06, 6), '#f2b632', { pos: [0, 0.4, 0.38] });
+  }
   const h = new Kit();
   h.add(new BoxGeometry(0.2, 0.2, 0.24), K);
   h.add(new BoxGeometry(0.1, 0.05, 0.08), K2, { pos: [0.13, 0.04, -0.02], rot: [0, 0, -0.5] });
@@ -39,68 +54,97 @@ function sheep(): Model {
   h.add(new BoxGeometry(0.05, 0.05, 0.02), '#ffffff', { pos: [-0.06, 0.03, 0.12] });
   h.add(new BoxGeometry(0.022, 0.03, 0.01), '#1a1210', { pos: [0.06, 0.03, 0.132] });
   h.add(new BoxGeometry(0.022, 0.03, 0.01), '#1a1210', { pos: [-0.06, 0.03, 0.132] });
-  h.add(new IcosahedronGeometry(0.1, 0), W, { pos: [0, 0.12, -0.04] });
+  h.add(new IcosahedronGeometry(stage === 0 ? 0.07 : 0.1, 0), W, { pos: [0, 0.12, -0.04] });
+  if (stage === 2)
+    for (const sx of [1, -1]) {
+      // curly ram's horns
+      h.add(new TorusGeometry(0.07, 0.026, 5, 10, Math.PI * 1.6), (f) => (f % 4 < 2 ? '#d9c79c' : '#b9a57a'), { pos: [sx * 0.13, 0.06, -0.04], rot: [0, Math.PI / 2, 0.6] });
+    }
   const l = new Kit();
-  l.add(new CylinderGeometry(0.045, 0.04, 0.28, 6), K, { pos: [0, -0.14, 0] });
+  l.add(new CylinderGeometry(0.045, 0.04, stage === 0 ? 0.32 : 0.28, 6), K, { pos: [0, stage === 0 ? -0.16 : -0.14, 0] });
   const t = new Kit();
   t.add(new IcosahedronGeometry(0.08, 0), W);
   return {
-    body: b.build(), head: h.build(), headAt: [0, 0.56, 0.4], leg: l.build(),
-    legs: [[0.14, 0.2], [-0.14, 0.2], [0.14, -0.2], [-0.14, -0.2]], legY: 0.28, tail: t.build(), tailAt: [0, 0.5, -0.38], top: 0.85,
+    body: b.build(), head: h.build(), headAt: [0, 0.56, 0.4], headScale: stage === 0 ? 1.3 : 1, leg: l.build(),
+    legs: [[0.14, 0.2], [-0.14, 0.2], [0.14, -0.2], [-0.14, -0.2]], legY: stage === 0 ? 0.31 : 0.28, tail: t.build(), tailAt: [0, 0.5, -0.38],
+    top: stage === 2 ? 0.92 : 0.85,
   };
 }
 
-function monkey(): Model {
-  const B = '#8b5a33', T = '#e6c095';
+function monkey(stage: number): Model {
+  const B = stage === 0 ? '#a06a3e' : stage === 2 ? '#7a4c2a' : '#8b5a33', T = '#e6c095', G = '#efe4d2';
   const b = new Kit();
   b.add(new IcosahedronGeometry(0.22, 1), B, { pos: [0, 0.42, 0], scale: [0.95, 1.1, 0.85] });
-  b.add(new IcosahedronGeometry(0.15, 0), T, { pos: [0, 0.4, 0.1], scale: [0.9, 1.1, 0.6] });
+  b.add(new IcosahedronGeometry(0.15, 0), stage === 2 ? G : T, { pos: [0, 0.4, 0.1], scale: [0.9, 1.1, 0.6] });
   b.add(new BoxGeometry(0.07, 0.3, 0.07), B, { pos: [0.22, 0.38, 0.04], rot: [0.3, 0, 0.2] });
   b.add(new BoxGeometry(0.07, 0.3, 0.07), B, { pos: [-0.22, 0.38, 0.04], rot: [0.3, 0, -0.2] });
   const h = new Kit();
   h.add(new IcosahedronGeometry(0.17, 1), B);
   h.add(new IcosahedronGeometry(0.12, 0), T, { pos: [0, -0.02, 0.1], scale: [1, 0.85, 0.6] });
-  h.add(new IcosahedronGeometry(0.06, 0), T, { pos: [0.17, 0.02, 0], scale: [0.5, 1, 1] });
-  h.add(new IcosahedronGeometry(0.06, 0), T, { pos: [-0.17, 0.02, 0], scale: [0.5, 1, 1] });
+  const ear = stage === 0 ? 0.045 : 0.06;
+  h.add(new IcosahedronGeometry(ear, 0), T, { pos: [0.17, 0.02, 0], scale: [0.5, 1, 1] });
+  h.add(new IcosahedronGeometry(ear, 0), T, { pos: [-0.17, 0.02, 0], scale: [0.5, 1, 1] });
   h.add(new BoxGeometry(0.03, 0.04, 0.02), '#2a1a12', { pos: [0.05, 0.03, 0.155] });
   h.add(new BoxGeometry(0.03, 0.04, 0.02), '#2a1a12', { pos: [-0.05, 0.03, 0.155] });
   h.add(new BoxGeometry(0.06, 0.015, 0.02), '#5a3424', { pos: [0, -0.05, 0.16] });
+  if (stage === 2) {
+    // a crest of fur and white whiskers: a wise old monkey
+    for (const [x, z, r] of [[0, 0.03, 0], [0.04, -0.03, -0.35], [-0.04, -0.03, 0.35]] as const)
+      h.add(new ConeGeometry(0.03, 0.09, 4), '#5a3820', { pos: [x, 0.18, z], rot: [-0.3, 0, r] });
+    h.add(new IcosahedronGeometry(0.07, 0), G, { pos: [0, -0.11, 0.1], scale: [1, 0.75, 0.6] }); // a soft white beard
+    for (const sx of [1, -1]) h.add(new BoxGeometry(0.05, 0.02, 0.02), G, { pos: [sx * 0.06, 0.09, 0.15] }); // bushy eyebrows
+  }
   const l = new Kit();
   l.add(new BoxGeometry(0.08, 0.22, 0.08), '#7a4a28', { pos: [0, -0.11, 0] });
   const t = new Kit();
   t.add(new CylinderGeometry(0.03, 0.035, 0.3, 5), B, { pos: [0, 0.1, -0.08], rot: [-0.9, 0, 0] });
-  t.add(new CylinderGeometry(0.025, 0.03, 0.22, 5), B, { pos: [0, 0.28, -0.12], rot: [0.4, 0, 0] });
-  t.add(new IcosahedronGeometry(0.04, 0), B, { pos: [0, 0.38, -0.06] });
+  if (stage >= 1) {
+    t.add(new CylinderGeometry(0.025, 0.03, 0.22, 5), B, { pos: [0, 0.28, -0.12], rot: [0.4, 0, 0] });
+    if (stage === 2) {
+      t.add(new CylinderGeometry(0.022, 0.025, 0.2, 5), B, { pos: [0, 0.44, -0.06], rot: [-0.3, 0, 0] });
+      t.add(new TorusGeometry(0.06, 0.02, 4, 10, Math.PI * 1.5), B, { pos: [0, 0.57, -0.08], rot: [0, Math.PI / 2, 0] });
+    } else t.add(new IcosahedronGeometry(0.04, 0), B, { pos: [0, 0.38, -0.06] });
+  } else t.add(new IcosahedronGeometry(0.04, 0), B, { pos: [0, 0.22, -0.16] });
   return {
-    body: b.build(), head: h.build(), headAt: [0, 0.78, 0.04], leg: l.build(),
-    legs: [[0.1, 0], [-0.1, 0]], legY: 0.22, tail: t.build(), tailAt: [0, 0.3, -0.18], top: 1.0,
+    body: b.build(), head: h.build(), headAt: [0, 0.78, 0.04], headScale: stage === 0 ? 1.3 : 1, leg: l.build(),
+    legs: [[0.1, 0], [-0.1, 0]], legY: 0.22, tail: t.build(), tailAt: [0, 0.3, -0.18], top: stage === 2 ? 1.1 : 1.0,
   };
 }
 
-function chicken(): Model {
-  const W = '#fff6e6', W2 = '#e3cfa8', R = '#e0533f', Y = '#f2a23a';
+function chicken(stage: number): Model {
+  const chick = stage === 0, W = chick ? '#ffe27a' : '#fff6e6', W2 = chick ? '#f5c95a' : '#e3cfa8', R = '#e0533f', Y = '#f2a23a';
   const b = new Kit();
-  b.add(new IcosahedronGeometry(0.25, 1), W, { pos: [0, 0.36, 0], scale: [0.85, 0.85, 1.05] });
+  b.add(new IcosahedronGeometry(0.25, 1), W, { pos: [0, 0.36, 0], scale: chick ? [0.9, 0.9, 0.95] : [0.85, 0.85, 1.05] });
   b.add(new IcosahedronGeometry(0.12, 0), W2, { pos: [0.18, 0.38, -0.02], scale: [0.4, 0.8, 1.2] });
   b.add(new IcosahedronGeometry(0.12, 0), W2, { pos: [-0.18, 0.38, -0.02], scale: [0.4, 0.8, 1.2] });
-  for (const a of [-0.35, 0, 0.35]) b.add(new ConeGeometry(0.05, 0.22, 4), W, { pos: [a * 0.2, 0.55, -0.24], rot: [-0.6, 0, a] });
+  if (stage === 1) for (const a of [-0.35, 0, 0.35]) b.add(new ConeGeometry(0.05, 0.22, 4), W, { pos: [a * 0.2, 0.55, -0.24], rot: [-0.6, 0, a] });
+  if (stage === 2) {
+    // a rooster: a golden ruff and a sweep of long, glossy tail feathers
+    b.add(new TorusGeometry(0.12, 0.05, 5, 12), (f) => (f % 2 ? '#e8a13a' : '#d48a2a'), { pos: [0, 0.52, 0.12], rot: [0.5, 0, 0] });
+    const TAIL = ['#2f6f5e', '#3b4f8f', '#1f3d35', '#c0542b', '#2f6f5e'];
+    for (let i = 0; i < 5; i++) {
+      const a = (i - 2) * 0.28;
+      b.add(new ConeGeometry(0.04, 0.44, 4), TAIL[i]!, { pos: [a * 0.2, 0.58 - Math.abs(a) * 0.1, -0.36], rot: [-1.25 + Math.abs(a) * 0.25, 0, a * 0.8] });
+    }
+  }
   const h = new Kit();
   h.add(new IcosahedronGeometry(0.12, 1), W);
-  for (const [z, s] of [[0.05, 0.05], [0, 0.06], [-0.05, 0.05]]) h.add(new BoxGeometry(0.03, s!, 0.05), R, { pos: [0, 0.12, z!] });
+  const comb: [number, number][] = chick ? [] : stage === 1 ? [[0.05, 0.05], [0, 0.06], [-0.05, 0.05]] : [[0.08, 0.08], [0.03, 0.11], [-0.02, 0.12], [-0.07, 0.1], [-0.11, 0.07]];
+  for (const [z, sz] of comb) h.add(new BoxGeometry(0.035, sz, 0.05), R, { pos: [0, 0.1 + sz / 2, z] });
   h.add(new ConeGeometry(0.035, 0.09, 4), Y, { pos: [0, -0.01, 0.15], rot: [Math.PI / 2, 0, 0] });
-  h.add(new BoxGeometry(0.03, 0.05, 0.02), R, { pos: [0, -0.07, 0.1] });
+  if (!chick) h.add(new BoxGeometry(0.03, stage === 2 ? 0.09 : 0.05, 0.02), R, { pos: [0, stage === 2 ? -0.09 : -0.07, 0.1] });
   h.add(new BoxGeometry(0.025, 0.03, 0.01), '#2a1a12', { pos: [0.08, 0.03, 0.08] });
   h.add(new BoxGeometry(0.025, 0.03, 0.01), '#2a1a12', { pos: [-0.08, 0.03, 0.08] });
   const l = new Kit();
   l.add(new CylinderGeometry(0.018, 0.018, 0.16, 4), Y, { pos: [0, -0.08, 0] });
   l.add(new BoxGeometry(0.08, 0.015, 0.09), Y, { pos: [0, -0.16, 0.02] });
   return {
-    body: b.build(), head: h.build(), headAt: [0, 0.64, 0.17], leg: l.build(),
-    legs: [[0.07, 0], [-0.07, 0]], legY: 0.17, tail: null, tailAt: [0, 0, 0], top: 0.85,
+    body: b.build(), head: h.build(), headAt: chick ? [0, 0.58, 0.15] : [0, 0.64, 0.17], headScale: chick ? 1.35 : stage === 2 ? 1.1 : 1, leg: l.build(),
+    legs: [[0.07, 0], [-0.07, 0]], legY: 0.17, tail: null, tailAt: [0, 0, 0], top: stage === 2 ? 0.95 : 0.85,
   };
 }
 
-const MODELS: Record<PetKind, () => Model> = { sheep, monkey, chicken };
+const MODELS: Record<PetKind, (stage: number) => Model> = { sheep, monkey, chicken };
 
 /** Thought-bubble icons, from the prototype's BUBI sprites. */
 const BUBI: Record<string, [string[], Record<string, string>]> = {
@@ -162,6 +206,7 @@ export class PetView {
   private bubble: Sprite;
   private bubbleTex: Record<string, CanvasTexture> = {};
   private kind: PetKind | null = null;
+  private stage = -1;
   private model!: Model;
   private carryTree: Mesh;
   /** World position of the pet's middle (for hand picking). */
@@ -182,9 +227,11 @@ export class PetView {
     for (const o of [this.group, this.halo, this.bubble]) o.frustumCulled = false;
   }
 
-  private build(kind: PetKind): void {
+  private build(kind: PetKind, stage: number): void {
     this.kind = kind;
-    this.model = MODELS[kind]();
+    this.stage = stage;
+    if (this.model) for (const g of [this.model.body, this.model.head, this.model.leg, this.model.tail]) g?.dispose();
+    this.model = MODELS[kind](stage);
     this.body.clear();
     const mat = worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
     const mk = (g: BufferGeometry) => {
@@ -198,6 +245,7 @@ export class PetView {
     mk(this.model.body);
     this.head = mk(this.model.head);
     this.head.position.set(...this.model.headAt);
+    this.head.scale.setScalar(this.model.headScale);
     this.legs = this.model.legs.map(([x, z]) => {
       const m = mk(this.model.leg);
       m.position.set(x, this.model.legY, z);
@@ -214,8 +262,9 @@ export class PetView {
     this.group.visible = this.halo.visible = this.bubble.visible = !!P;
     this.centre.visible = !!P;
     if (!P) return;
-    if (P.kind !== this.kind) this.build(P.kind);
-    const st = petStage(P), sc = STAGE_SCALE[st]!, A = P.act;
+    const st = petStage(P);
+    if (P.kind !== this.kind || st !== this.stage) this.build(P.kind, st);
+    const sc = STAGE_SCALE[st]!, A = P.act;
     const x = P.px + wd(P.px, P.x) * alpha, z = P.py + wd(P.py, P.y) * alpha;
     const wx = fx + wd(fx, x), wz = fz + wd(fz, z);
     const wet = isWater(S, Math.floor(x), Math.floor(z));

@@ -131,19 +131,21 @@ try {
   // The hand: grab a real villager with the mouse; a slow move drops, a flick throws.
   await desk.evaluate(() => window.__hv.setTool('hand'));
   await desk.waitForFunction(() => window.__hv.physicsReady(), null, { timeout: 30000 });
-  const findVillager = () => desk.evaluate(() => {
-    // only villagers in the open middle of the screen, away from the HUD, quest and pet panels
+  const findVillager = (skip = []) => desk.evaluate((skip) => {
+    // only our own villagers (Red ones can't be picked up outside our land), in the open middle
+    // of the screen, away from the HUD, quest and pet panels, and not ones that already refused
     const hv = window.__hv, scr = (d) => { const p = d.p.clone().project(hv.rig.camera); return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight }; };
-    const ok = (d) => { const p = scr(d); return p.x > 320 && p.x < 960 && p.y > 140 && p.y < 600; };
+    const ok = (d) => { const p = scr(d); return d.v.tribe === 0 && !skip.includes(d.v.id) && p.x > 320 && p.x < 960 && p.y > 140 && p.y < 600; };
     const d = hv.renderer.villagers.drawn.find((x) => (x.v.type === 'settler' || x.v.type === 'worker') && x.v.dizzy <= 0 && ok(x)) ?? hv.renderer.villagers.drawn.find(ok);
     if (!d) return null;
     const p = scr(d);
     return { x: p.x, y: p.y, id: d.v.id, vx: d.v.x, vz: d.v.y, stat: { ...hv.sim().S.stat } };
-  });
+  }, skip);
   /** Villagers keep walking: re-aim at the same one just before pressing, and retry. */
   const grabVillager = async () => {
+    const missed = [];
     for (let attempt = 0; attempt < 5; attempt++) {
-      const t = await findVillager();
+      const t = await findVillager(missed);
       if (!t) return null;
       await desk.mouse.move(t.x, t.y);
       await frames(desk, 2);
@@ -158,6 +160,7 @@ try {
       await desk.mouse.down();
       if ((await desk.evaluate(() => window.__hv.sim().S.held?.k)) === 'v') return { ...t, ...again };
       await desk.mouse.up();
+      missed.push(t.id);
       await frames(desk, 3);
     }
     return null;
@@ -190,7 +193,7 @@ try {
   await desk.mouse.move(640, 400);
   await frames(desk, 3);
   target = await desk.evaluate(() => {
-    const hv = window.__hv, S = hv.sim().S, v = S.vills.find((o) => o.type === 'settler' || o.type === 'worker') ?? S.vills[0];
+    const hv = window.__hv, S = hv.sim().S, ours = S.vills.filter((o) => o.tribe === 0), v = ours.find((o) => o.type === 'settler' || o.type === 'worker') ?? ours[0];
     if (!v || !hv.sim().grab(v.id)) return null;
     return { id: v.id, vx: v.x, vz: v.y, stat: { ...S.stat } };
   });
