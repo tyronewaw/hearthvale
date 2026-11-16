@@ -1,3 +1,5 @@
+import { QUEST_VERSION } from './defs';
+import { remapQuest } from './quests';
 import { N, type State } from './world';
 import { emptyState } from './worldgen';
 
@@ -53,6 +55,8 @@ export function deserialize(json: string): State | null {
     S.rock = unb64(o.rock);
     if (S.h.length !== N * N || S.tree.length !== N * N) return null;
     S.stat = { ...base.stat, ...(o.stat ?? {}) };
+    S.q = remapQuest(o.q ?? 0, o.qv ?? 1);
+    S.qv = QUEST_VERSION;
     S.held = null;
     S.flying = [];
     for (const v of S.vills) {

@@ -1,3 +1,4 @@
+import { QUEST_VERSION } from './defs';
 import { Rng } from './rng';
 import { isWater, setVertices, tileFlat } from './terrain';
 import { D4, D8, DAY, MAXH, N, clamp, idx, type State } from './world';
@@ -54,6 +55,7 @@ export function emptyState(seed: number): State {
     pet: null,
     poos: [],
     q: 0,
+    qv: QUEST_VERSION,
   };
 }
 

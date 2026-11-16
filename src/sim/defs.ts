@@ -12,7 +12,7 @@ export const ROLE_NAME: Record<RoleId, string> = {
   settler: 'villager', farmer: 'farmer', forester: 'forester', fisher: 'fisher', builder: 'builder', priest: 'priest',
 };
 
-export type StructKind = 'hearth' | 'farm' | 'lumber' | 'fish' | 'shrine';
+export type StructKind = 'hearth' | 'farm' | 'lumber' | 'fish' | 'shrine' | 'pen';
 export interface StructDef {
   name: string;
   wood: number;
@@ -26,7 +26,12 @@ export const STRUCTS: Record<StructKind, StructDef> = {
   lumber: { name: 'Lumber camp', wood: 6, cap: 3, role: 'forester', desc: 'Needs flat land. Foresters fell and replant nearby trees for wood.' },
   fish: { name: 'Fishing hut', wood: 8, cap: 3, role: 'fisher', desc: 'Must touch the sea or a lake. Fishers bring in food all year.' },
   shrine: { name: 'Shrine', wood: 25, cap: 3, role: 'priest', desc: 'Needs flat land. Priests pray here for extra faith.' },
+  pen: { name: 'Pet pen', wood: 12, cap: 0, role: 'settler', desc: 'Your pet\'s own home. It sleeps here and rests twice as fast, and its bedding fertilises farms nearby. Only one.' },
 };
+/** Buildings that can only be built once. */
+export const UNIQUE: readonly StructKind[] = ['hearth', 'pen'];
+/** Bump when the quest chain changes, so saves can map their quest index (see quests.ts). */
+export const QUEST_VERSION = 2;
 export const STRUCT_KINDS = Object.keys(STRUCTS) as StructKind[];
 
 export type ToolId = 'hand' | 'raise' | 'lower' | 'build' | 'totem' | 'bloom' | 'flat' | 'rain' | 'isle' | 'fest';

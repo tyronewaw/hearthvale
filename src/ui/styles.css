@@ -91,3 +91,4 @@ body.m .card{padding:14px 16px}body.m .card h2{font-size:26px}body.m .card p,bod
 #loading.done{opacity:0;pointer-events:none}
 #stats{position:fixed;left:calc(12px + env(safe-area-inset-left));bottom:calc(12px + env(safe-area-inset-bottom));padding:4px 8px;font-size:13px;display:none}
 #stats.show{display:block}
+.btn:disabled{opacity:.45;cursor:default}

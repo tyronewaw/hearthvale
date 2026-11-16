@@ -4,7 +4,7 @@
  * Every distance and movement is measured round the torus.
  */
 import { BALANCE } from './balance';
-import { BMAX, BN, BTH, STRUCTS, ROLE_NAME, type StructKind } from './defs';
+import { BMAX, BN, BTH, STRUCTS, ROLE_NAME, UNIQUE, type StructKind } from './defs';
 import type { SimEvent, SparkKind } from './events';
 import type { Rng } from './rng';
 import { isWater, tileFlat } from './terrain';
@@ -37,6 +37,8 @@ export function structById(S: State, id: number | null): Struct | undefined {
   return id === null ? undefined : S.structs.find((s) => s.id === id);
 }
 export const hearth = (S: State): Struct | undefined => S.structs.find((s) => s.k === 'hearth');
+/** The pet pen, once it is built. */
+export const builtPen = (S: State): Struct | undefined => S.structs.find((s) => s.k === 'pen' && s.prog >= 1);
 export const roleCount = (S: State, r: string): number => S.vills.reduce((n, v) => n + (v.role === r ? 1 : 0), 0);
 export const workersAt = (S: State, s: Struct): number => S.vills.reduce((n, v) => n + (v.job === s.id ? 1 : 0), 0);
 
@@ -546,7 +548,7 @@ export function popCount(S: State): number {
 
 export function validSite(c: Ctx, k: StructKind, x: number, y: number): boolean {
   const S = c.S;
-  if (k === 'hearth' && hearth(S)) return false;
+  if (UNIQUE.includes(k) && S.structs.some((s) => s.k === k)) return false;
   if (k === 'fish') return !isWater(S, x, y) && !!nearWater(S, x, y) && spaced(c, x, y) && !S.tree[idx(x, y)] && !S.rock[idx(x, y)];
   return canSettle(c, x, y);
 }
@@ -655,7 +657,7 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
   sfx(c, 'land');
   if (isWater(S, tx, ty)) spark(c, x, y, 'splash', 6);
   const s = nearStruct(S, x, y, 1.3);
-  if (s) {
+  if (s && STRUCTS[s.k].cap > 0) {
     const def = STRUCTS[s.k];
     if (v.job === s.id) {
       /* already works here */

@@ -3,6 +3,7 @@ import '@fontsource/pixelify-sans/600.css';
 import './ui/styles.css';
 import { Vector3 } from 'three';
 import { BMAX, BN, BTH, ROLE_NAME, STRUCTS, type StructKind, type ToolId } from './sim/defs';
+import { BALANCE } from './sim/balance';
 import { SAVE_KEY, deserialize, serialize } from './sim/save';
 import { V2_KEY, migrateV2 } from './sim/migrate';
 import { Audio } from './audio/audio';
@@ -160,6 +161,9 @@ const petCard = new PetCard({
   },
   feed: () => {
     sim.feed();
+  },
+  pen: () => {
+    sim.penPet();
   },
   find: () => {
     const P = sim.S.pet;
@@ -357,8 +361,11 @@ function tooltip(): string | null {
       (b.tb > 1 ? `<br>Trees nearby: growth +${Math.round((b.tb - 1) * 100)}%` : '');
   }
   if (b?.kind === 'struct') {
-    const D = STRUCTS[b.k], n = workersAt(S, b);
-    return `<b>${D.name}</b>${b.prog < 1 ? ` · building ${Math.round(b.prog * 100)}%` : ''}<br>${n} of ${D.cap} ${D.role}s` +
+    const D = STRUCTS[b.k], n = workersAt(S, b), building = b.prog < 1 ? ` · building ${Math.round(b.prog * 100)}%` : '';
+    if (b.k === 'pen')
+      return `<b>${S.pet ? S.pet.name + "'s pen" : D.name}</b>${building}<br>Sleeps here and rests twice as fast` +
+        `<br>Bedding fertilises farms within ${BALANCE.penFertR} tiles`;
+    return `<b>${D.name}</b>${building}<br>${n} of ${D.cap} ${D.role}s` +
       (b.k === 'hearth' ? `<br>Store: ${Math.floor(S.food)} food, ${Math.floor(S.wood)} wood` : '') +
       (b.fert > 0 ? '<br>Fertilised: double harvest' : '');
   }

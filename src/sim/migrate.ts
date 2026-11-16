@@ -5,6 +5,7 @@
  * pet and progress. The v2 save itself is left untouched, so the legacy game still has it.
  */
 import { mkPet, type Pet, type PetKind } from './pet';
+import { remapQuest } from './quests';
 import { cascade, setVertices } from './terrain';
 import { generateWorld } from './worldgen';
 import { N, idx, wrap, type Home, type State, type Struct, type Vill } from './world';
@@ -91,7 +92,7 @@ export function migrateV2(json: string): State | null {
   // Progress and resources.
   Object.assign(S, {
     faith: o.faith ?? 40, food: o.food ?? 40, wood: o.wood ?? 24, t: o.t ?? S.t, best: o.best ?? 0, maxLv: o.maxLv ?? -1,
-    won: !!o.won, q: o.q ?? 0, fest: o.fest ?? 0, hinted: o.hinted ?? {},
+    won: !!o.won, q: remapQuest(o.q ?? 0, 1), fest: o.fest ?? 0, hinted: o.hinted ?? {},
   });
   S.stat = { ...S.stat, ...(o.stat ?? {}) };
   S.totem = o.totem ? [wrap(o.totem[0] + OFF), wrap(o.totem[1] + OFF)] : null;

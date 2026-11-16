@@ -1,6 +1,6 @@
 # Hearthvale
 
-A cosy 3D god game for the browser. Shape a little wrap-around planet, guide your tribe with a god hand, and raise a creature that learns from how you treat it. It runs on desktop and phone.
+A cosy 3D god game for the browser. Shape a little wrap-around planet, guide your tribe with a god hand, and raise a creature that learns from how you treat it. It's made for PC (mouse and keyboard) and runs in any modern desktop browser.
 
 **Play:** https://tyronewaw.github.io/hearthvale/ (deployed from `main`)  
 **Original 2D prototype:** https://tyronewaw.github.io/hearthvale/legacy/

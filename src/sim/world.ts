@@ -180,6 +180,8 @@ export interface State {
   poos: { x: number; y: number; t: number }[];
   /** Index of the current quest. */
   q: number;
+  /** Quest-chain version `q` refers to (QUEST_VERSION). */
+  qv: number;
 }
 
 export const season = (t: number): number => Math.floor(t / DAY / 3) % 4;

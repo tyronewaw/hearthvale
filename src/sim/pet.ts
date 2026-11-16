@@ -6,14 +6,14 @@
  */
 import { BALANCE } from './balance';
 import { bloom, festival, rain } from './blessings';
-import { BMAX } from './defs';
-import { isWater, tileFlat } from './terrain';
-import { findTile, hearth, homeById, mkV, spark, structById, type Ctx } from './village';
+import { BMAX, STRUCTS } from './defs';
+import { isWater, setVertices, tileFlat } from './terrain';
+import { builtPen, findTile, finish, hearth, homeById, mkV, nearWater, spark, structById, type Ctx } from './village';
 import { clamp, idx, nightF, tdist, wd, wrap, type Held, type State, type Vill } from './world';
 
 export type PetKind = 'sheep' | 'monkey' | 'chicken';
 export type Habit = 'help' | 'plant' | 'dance' | 'play' | 'mischief';
-export type Trick = 'bloom' | 'rain' | 'fest';
+export type Trick = 'bloom' | 'rain' | 'fest' | 'flat' | 'isle' | 'build';
 export type PetActId = Habit | 'eat' | 'sleep' | 'wander' | 'follow' | 'poop' | 'trick';
 export type Leash = 'free' | 'follow' | 'stay';
 
@@ -22,7 +22,9 @@ export const HNAME: Record<PetActId, string> = {
   help: 'Helping', plant: 'Planting', dance: 'Dancing', play: 'Playing', mischief: 'Mischief', eat: 'Eating',
   sleep: 'Sleeping', wander: 'Pottering about', follow: 'Following you', poop: 'Fertilising the soil', trick: 'Casting a trick',
 };
-export const TRICK_NAME: Record<Trick, string> = { bloom: 'Bloom', rain: 'Rain', fest: 'Festival' };
+/** Tricks, in the order the pet card lists them. The first five copy blessings; Build copies you placing buildings. */
+export const TRICKS: readonly Trick[] = ['bloom', 'rain', 'fest', 'flat', 'isle', 'build'];
+export const TRICK_NAME: Record<Trick, string> = { bloom: 'Bloom', rain: 'Rain', fest: 'Festival', flat: 'Level', isle: 'Rise', build: 'Build' };
 export const STAGES = ['Baby', 'Young', 'Grand'] as const;
 
 export const PETS: Record<PetKind, { name: string; def: string; speed: number; learn: number; traits: string[] }> = {
@@ -46,6 +48,8 @@ export interface PetAct {
   b?: number;
   step?: number;
   trick?: Trick;
+  /** Sleeping in the pet pen. */
+  pen?: boolean;
 }
 
 export interface Pet {
@@ -79,8 +83,16 @@ export function mkPet(kind: PetKind, name: string, x: number, y: number): Pet {
   return {
     kind, name, x: wrap(x), y: wrap(y), px: wrap(x), py: wrap(y), face: 0, need: { food: 80, energy: 85, fun: 70 }, love: 55,
     mode: 'free', post: null, act: null, w: { help: 1, plant: 1, dance: 1, play: 1, mischief: 1 }, last: null, carry: null,
-    poop: 0, mv: false, age: 0, xp: 0, stage: 0, seen: { bloom: 0, rain: 0, fest: 0 }, tricks: [], trickCD: 30,
+    poop: 0, mv: false, age: 0, xp: 0, stage: 0, seen: noneSeen(), tricks: [], trickCD: 30,
   };
+}
+
+const noneSeen = (): Record<Trick, number> => Object.fromEntries(TRICKS.map((t) => [t, 0])) as Record<Trick, number>;
+
+/** Bring a pet from an older save up to date (new tricks to watch for, unknown ones dropped). */
+export function fixPet(P: Pet): void {
+  P.seen = { ...noneSeen(), ...(P.seen ?? {}) };
+  P.tricks = (P.tricks ?? []).filter((t) => TRICKS.includes(t));
 }
 
 export const petStage = (P: Pet): number => (P.xp >= BALANCE.petGrand ? 2 : P.xp >= BALANCE.petYoung ? 1 : 0);
@@ -96,6 +108,8 @@ export interface PetCtx extends Ctx {
   handGround: [number, number] | null;
   /** Throw a villager (monkey mischief): physics or a simple arc takes over. */
   fling(v: Vill, vx: number, vz: number): void;
+  /** Tiles whose land just changed: clear their flora, tell the renderer, recheck buildings. */
+  reshape(touched: Set<number>): void;
 }
 
 const toast = (c: Ctx, msg: string) => c.emit({ k: 'toast', msg });
@@ -121,24 +135,153 @@ function nearestV(S: State, x: number, y: number, r: number, f?: (v: Vill) => bo
   return best;
 }
 
+/** No building within `r` tiles of (x, y). */
+function clearOf(c: Ctx, x: number, y: number, r: number): boolean {
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (c.bmap[idx(x + dx, y + dy)]) return false;
+  return true;
+}
+const nearHomes = (S: State, x: number, y: number, r: number) => S.homes.some((b) => tdist(b.x, b.y, x, y) < r);
+
+/** A gentle, unbuilt slope near homes that the Level trick can smooth (its 3×3 vertices span one step). */
+function levelSpot(c: Ctx, x: number, y: number): boolean {
+  const S = c.S;
+  if (isWater(S, x, y) || tileFlat(S, x, y)) return false;
+  let lo = 99, hi = -1;
+  for (let dy = 0; dy <= 2; dy++)
+    for (let dx = 0; dx <= 2; dx++) {
+      const h = S.h[idx(x + dx, y + dy)]!;
+      lo = Math.min(lo, h);
+      hi = Math.max(hi, h);
+    }
+  return lo >= 1 && hi - lo <= 1 && clearOf(c, x, y, 3) && nearHomes(S, x, y, 8);
+}
+
+/** Shallow sea right by the shore, near homes and away from fishing huts: the Rise trick makes it beach. */
+function riseSpot(c: Ctx, x: number, y: number): boolean {
+  const S = c.S;
+  if (!isWater(S, x, y)) return false;
+  let shore = false;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) if (!isWater(S, x + dx, y + dy)) shore = true;
+  return shore && clearOf(c, x, y, 3) && nearHomes(S, x, y, 10);
+}
+
+/** Where a known trick would do some good around (cx, cy), or null. */
+function trickTarget(c: PetCtx, t: Trick, cx: number, cy: number, r: number): { tile: [number, number]; s?: number } | null {
+  const S = c.S, H = hearth(S);
+  const at = (tile: [number, number] | null) => (tile ? { tile } : null);
+  if (t === 'bloom') return at(findTile(c, cx, cy, r, (x, y) => !isWater(S, x, y) && !tileFlat(S, x, y) && !S.tree[idx(x, y)]));
+  if (t === 'rain') {
+    const f = S.structs.find((s) => s.k === 'farm' && tdist(s.x, s.y, cx, cy) < r) ?? S.homes.find((b) => tdist(b.x, b.y, cx, cy) < r);
+    return f ? { tile: [f.x, f.y] } : null;
+  }
+  if (t === 'fest') return H ? { tile: [wrap(H.x + 1), wrap(H.y + 1)] } : null;
+  if (t === 'flat') return at(findTile(c, cx, cy, Math.min(r, 10), (x, y) => levelSpot(c, x, y)));
+  if (t === 'isle') return at(findTile(c, cx, cy, Math.min(r, 10), (x, y) => riseSpot(c, x, y)));
+  let best: { tile: [number, number]; s: number } | null = null, bd = r;
+  for (const s of S.structs)
+    if (s.prog < 1) {
+      const d = tdist(s.x, s.y, cx, cy);
+      if (d < bd) {
+        bd = d;
+        best = { tile: [s.x, s.y], s: s.id };
+      }
+    }
+  return best;
+}
+
+/**
+ * Reshape the land for a trick, but only if no home or building would lose its footing:
+ * otherwise the heights are put back and nothing happens. Returns true if the land changed.
+ */
+export function safeReshape(c: PetCtx, fn: (touched: Set<number>) => void): boolean {
+  const S = c.S, before = S.h.slice(), touched = new Set<number>();
+  fn(touched);
+  if (!touched.size) return false;
+  const ok = S.homes.every((b) => tileFlat(S, b.x, b.y)) &&
+    S.structs.every((s) => (s.k === 'fish' ? !isWater(S, s.x, s.y) && !!nearWater(S, s.x, s.y) : tileFlat(S, s.x, s.y)));
+  if (!ok) {
+    S.h.set(before);
+    return false;
+  }
+  c.reshape(touched);
+  return true;
+}
+
+/** Level trick: smooth the 2×2 tiles at (x, y) to their most common corner height. */
+export function petLevel(c: PetCtx, x: number, y: number): boolean {
+  const S = c.S, verts: [number, number][] = [], cnt = new Map<number, number>();
+  for (let dy = 0; dy <= 2; dy++)
+    for (let dx = 0; dx <= 2; dx++) {
+      verts.push([x + dx, y + dy]);
+      const h = S.h[idx(x + dx, y + dy)]!;
+      cnt.set(h, (cnt.get(h) ?? 0) + 1);
+    }
+  let tgt = 1, bc = -1;
+  for (const [h, n] of cnt) if (n > bc || (n === bc && h > tgt)) [tgt, bc] = [h, n];
+  return safeReshape(c, (touched) => setVertices(S, verts, Math.max(1, tgt), touched));
+}
+
+/** Rise trick: lift one tile of shallow sea into a beach. */
+export function petRise(c: PetCtx, x: number, y: number): boolean {
+  const S = c.S, verts: [number, number][] = [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]];
+  return safeReshape(c, (touched) => setVertices(S, verts.filter(([vx, vy]) => S.h[idx(vx, vy)]! < 1), 1, touched));
+}
+
+/** The pet is in its pen (within a tile of the middle). */
+function penNear(S: State, P: Pet): boolean {
+  const pen = builtPen(S);
+  return !!pen && tdist(pen.x + 0.5, pen.y + 0.5, P.x, P.y) < 1.2;
+}
+const STRUCTS_NAME = (S: State, id: number | undefined) => {
+  const s = structById(S, id ?? null);
+  return s ? STRUCTS[s.k].name.toLowerCase() : 'building';
+};
+
 /** Choose a target for an action and start walking to it (the prototype's startAct). */
 export function startAct(c: PetCtx, id: PetActId): void {
   const S = c.S, P = S.pet!, R = c.rng, [cx, cy, r] = petCentre(c, P), H = hearth(S), k = P.kind;
   const land = (x: number, y: number) => !isWater(S, x, y);
   const a: PetAct = { id, ph: 'go', tx: P.x, ty: P.y, t: 2, go: 0, tile: [Math.floor(P.x), Math.floor(P.y)] };
   let tgt: [number, number] | null = null;
-  if (id === 'eat') {
+  // A trick, if the pet knows one that would help around here
+  if (id === 'help' && P.tricks.length && petStage(P) >= 1 && P.trickCD <= 0 && R.next() < 0.6) {
+    const opts: [Trick, { tile: [number, number]; s?: number }][] = [];
+    for (const t of P.tricks) {
+      const o = trickTarget(c, t, cx, cy, r);
+      if (o) opts.push([t, o]);
+    }
+    const pick = opts.length ? opts[R.int(opts.length)]! : null;
+    if (pick) {
+      a.id = 'trick';
+      a.trick = pick[0];
+      a.s = pick[1].s;
+      a.t = 3;
+      tgt = pick[1].tile;
+    }
+  }
+  if (tgt) {
+    /* a trick */
+  } else if (id === 'eat') {
     if (k === 'monkey') tgt = findTile(c, cx, cy, r, (x, y) => S.tree[idx(x, y)]! > 0);
     else if (k === 'chicken') tgt = findTile(c, cx, cy, r, (x, y) => c.crops.has(idx(x, y)) || S.flower[idx(x, y)]! > 0);
     else tgt = findTile(c, cx, cy, r, (x, y) => S.flower[idx(x, y)]! > 0);
-    if (!tgt && H && S.food > 10 && tdist(H.x, H.y, cx, cy) < r + 4) {
-      tgt = [H.x, H.y];
-      a.store = true;
+    if (!tgt && S.food > 10) {
+      // the Hearth's store, or the trough in the pen, whichever is nearer
+      const feed = [H, builtPen(S)].filter((s): s is NonNullable<typeof s> => !!s && tdist(s.x, s.y, cx, cy) < r + 4)
+        .sort((p, q) => tdist(p.x, p.y, P.x, P.y) - tdist(q.x, q.y, P.x, P.y))[0];
+      if (feed) {
+        tgt = [feed.x, feed.y];
+        a.store = true;
+      }
     }
     if (!tgt) tgt = findTile(c, cx, cy, r, (x, y) => land(x, y) && !c.bmap[idx(x, y)]);
     a.t = 5;
   } else if (id === 'sleep') {
-    tgt = nightF(S.t) > 0.5 && H && tdist(H.x, H.y, P.x, P.y) < 12 ? [wrap(H.x + 1), wrap(H.y + 1)] : [Math.floor(P.x), Math.floor(P.y)];
+    const pen = builtPen(S), post = P.mode === 'stay' ? P.post : null;
+    if (pen && tdist(pen.x + 0.5, pen.y + 0.5, P.x, P.y) < 30 && (!post || tdist(pen.x + 0.5, pen.y + 0.5, post[0], post[1]) < 8)) {
+      tgt = [pen.x, pen.y];
+      a.pen = true;
+    } else tgt = nightF(S.t) > 0.5 && H && tdist(H.x, H.y, P.x, P.y) < 12 ? [wrap(H.x + 1), wrap(H.y + 1)] : [Math.floor(P.x), Math.floor(P.y)];
     a.t = 999;
   } else if (id === 'play') {
     const v = nearestV(S, cx, cy, r, (o) => o.type !== 'worker');
@@ -147,15 +290,6 @@ export function startAct(c: PetCtx, id: PetActId): void {
       tgt = [Math.floor(v.x), Math.floor(v.y)];
     }
     a.t = 6;
-  } else if (id === 'help' && P.tricks.length && petStage(P) >= 1 && P.trickCD <= 0 && R.next() < 0.6) {
-    a.id = 'trick';
-    a.trick = P.tricks[R.int(P.tricks.length)]!;
-    a.t = 3;
-    if (a.trick === 'bloom') tgt = findTile(c, cx, cy, r, (x, y) => land(x, y) && !tileFlat(S, x, y) && !S.tree[idx(x, y)]);
-    else if (a.trick === 'rain') {
-      const f = S.structs.find((s) => s.k === 'farm' && tdist(s.x, s.y, cx, cy) < r) ?? S.homes.find((b) => tdist(b.x, b.y, cx, cy) < r);
-      if (f) tgt = [f.x, f.y];
-    } else if (H) tgt = [wrap(H.x + 1), wrap(H.y + 1)];
   } else if (id === 'help') {
     if (k === 'sheep') {
       let bd = 1e9;
@@ -291,14 +425,43 @@ export function finishAct(c: PetCtx, a: PetAct): 'keep' | void {
       msg = st === 0 ? `${P.name} laid a tiny egg` : `${P.name} laid a golden egg`;
       spark(c, P.x, P.y, 'spark', 8);
     }
+  } else if (a.id === 'sleep' && a.pen) {
+    const pen = builtPen(S);
+    if (pen && tdist(pen.x + 0.5, pen.y + 0.5, P.x, P.y) < 1.2) {
+      // the bedding goes on the fields: farms near the pen yield double for a while
+      let n = 0;
+      for (const s of S.structs)
+        if (s.k === 'farm' && s.prog >= 1 && tdist(s.x, s.y, pen.x, pen.y) <= BALANCE.penFertR) {
+          s.fert = Math.max(s.fert, BALANCE.fertSeconds);
+          n++;
+        }
+      P.poop = 0;
+      if (n) {
+        msg = `${P.name}'s bedding fertilised ${n === 1 ? 'a farm' : n + ' farms'}`;
+        spark(c, pen.x + 0.5, pen.y + 0.5, 'spark', 6);
+      }
+    }
   } else if (a.id === 'trick' && a.trick) {
-    P.trickCD = 110;
+    let did = true;
     if (a.trick === 'bloom') bloom(c, tx + 0.5, ty + 0.5, 3, true);
     else if (a.trick === 'rain') rain(c, tx, ty, 18);
-    else festival(c, 20);
-    msg = `${P.name} cast ${TRICK_NAME[a.trick]}!`;
-    spark(c, P.x, P.y, 'spark', 10);
-    sfx(c, 'magic');
+    else if (a.trick === 'fest') festival(c, 20);
+    else if (a.trick === 'flat') did = petLevel(c, tx, ty);
+    else if (a.trick === 'isle') did = petRise(c, tx, ty);
+    else {
+      const s = structById(S, a.s ?? null);
+      did = !!s && s.prog < 1;
+      if (s && did) {
+        s.prog = Math.min(1, s.prog + BALANCE.petBuild * (st === 2 ? 1.4 : 1));
+        if (s.prog >= 1) finish(c, s);
+      }
+    }
+    if (did) {
+      P.trickCD = BALANCE.trickCooldown;
+      msg = a.trick === 'build' ? `${P.name} helped build the ${STRUCTS_NAME(S, a.s)}!` : `${P.name} cast ${TRICK_NAME[a.trick]}!`;
+      spark(c, P.x, P.y, 'spark', 10);
+      sfx(c, 'magic');
+    } else P.trickCD = 15;
     P.last = { id: 'help', t: S.t };
   } else if (a.id === 'plant') {
     bloom(c, tx + 0.5, ty + 0.5, 2, true);
@@ -369,8 +532,10 @@ export function stepPet(c: PetCtx, dt: number): void {
   const a0 = P.act;
   n.food = Math.max(0, n.food - dt * 0.2);
   n.fun = Math.max(0, n.fun - dt * 0.17);
-  n.energy = clamp(n.energy + dt * (a0 && a0.id === 'sleep' && a0.ph === 'do' ? 2.4 : -0.14), 0, 100);
+  const asleep = !!a0 && a0.id === 'sleep' && a0.ph === 'do', inPen = asleep && !!a0.pen && penNear(S, P);
+  n.energy = clamp(n.energy + dt * (asleep ? 2.4 * (inPen ? BALANCE.penRest : 1) : -0.14), 0, 100);
   P.love += (50 - P.love) * dt * 0.0015;
+  if (inPen) P.love = Math.min(100, P.love + BALANCE.penLove * dt);
   if (P.poop > 0 && (P.poop -= dt) <= 0 && (!a0 || a0.id === 'wander')) startAct(c, 'poop');
   const hg = c.handGround;
   if (P.mode === 'follow' && hg && (!P.act || P.act.id === 'wander' || P.act.id === 'follow') && tdist(P.x, P.y, hg[0], hg[1]) > 2.5)
@@ -496,15 +661,16 @@ export function watchLearn(c: PetCtx, id: Trick, vx: number, vy: number): void {
   P.w[h] = Math.min(5, P.w[h] + 0.15 * PETS[P.kind].learn);
   P.xp += 2;
   P.seen[id] = (P.seen[id] ?? 0) + 1;
-  const nm = TRICK_NAME[id];
+  const nm = TRICK_NAME[id], build = id === 'build';
   if (P.seen[id] >= 2 && !P.tricks.includes(id)) {
     P.tricks.push(id);
     P.trickCD = Math.min(P.trickCD, 20);
-    toast(c, `${P.name} learned to cast ${nm}!` + (petStage(P) < 1 ? ' It can use it once it grows' : ''));
+    toast(c, (build ? `${P.name} learned to help build!` : `${P.name} learned to cast ${nm}!`) + (petStage(P) < 1 ? ' It can use it once it grows' : ''));
     sfx(c, 'magic');
     spark(c, P.x, P.y, 'spark', 12);
-  } else if (!P.tricks.includes(id)) toast(c, `${P.name} watched you cast ${nm}. Once more and it will learn it`);
-  else toast(c, `${P.name} watched you and learned`);
+  } else if (!P.tricks.includes(id))
+    toast(c, build ? `${P.name} watched you build. Once more and it will learn to help` : `${P.name} watched you cast ${nm}. Once more and it will learn it`);
+  else if (!build) toast(c, `${P.name} watched you and learned`);
 }
 
 /** Feed from the store (the pet card's Feed button). */

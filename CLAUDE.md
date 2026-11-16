@@ -1,9 +1,9 @@
 # Hearthvale
 
-A cosy 3D god game for the browser, on desktop and phone. It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
+A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and keyboard first; phones only need to keep working, with no new phone-specific work). It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are built. The user said "PC only", which reads either as no phone push notifications or as a PC-only game: mobile-specific polish (long-press scold, double-tap build, compact layout tweaks) is on hold until they confirm.
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. Next, chosen by the user: phase 9 (pet pen and more tricks) and phase 10 (a cosy rival tribe in terracotta red that you win over, Black & White style). Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
@@ -38,7 +38,7 @@ src/sim/      pure game rules. No three, DOM, Math.random or imports from other 
               habit-weighted action choice, species help/mischief, tricks, stages, leash, droppings,
               petCatch (trees dropped on it are snacks, gently dropped villagers are playmates)
   blessings.ts bloom / rain / festival effects (tools in defs.TOOLS; the pet's tricks use them too)
-  quests.ts   the 13-quest chain (population targets: goal/5 and goal); checked twice a second in tick()
+  quests.ts   the quest chain (prototype's 13 + pen + tricks), stable ids, remapQuest() for older saves
   migrate.ts  migrateV2(): the prototype's 64² save set into a cleared basin at the planet's centre
   sim.ts      Sim class: tick() = the prototype's update(); commands useTool, build, grab,
               grabTree/Rock, drop, release/landed; events queue (drain() each frame)
@@ -119,8 +119,16 @@ legacy/       the 2D prototype (design reference; do not edit)
   - Leash: Free / Follow (walks to `sim.handGround`, set each frame from the hover point) / Stay / Send (pick a spot).
   - Monkey mischief flings villagers through a `launch` event that physics flies. Those landings are `quiet` and don't count as the player's throws.
   - New worlds open the choose screen after the help.
-- **Blessings** keep the prototype's costs and unlocks (Bloom 15 faith at 25 villagers, Level 20 at 60, Rain 30 at 110, Rise 40 at 180, Festival 80 at 280). Casting Bloom, Rain or Festival near the pet (within 10 tiles) teaches it. Keys 6–0.
-- **Quests** are the prototype's chain. "A real village" asks for goal/5 (200) and the last quest for the goal (1000). Each gives faith, and finishing them all shows the win screen (play continues).
+- **Blessings** keep the prototype's costs and unlocks (Bloom 15 faith at 25 villagers, Level 20 at 60, Rain 30 at 110, Rise 40 at 180, Festival 80 at 280). Casting any blessing near the pet (within 10 tiles) teaches it. Keys 6–0.
+- **Quests** are the prototype's chain plus new ones. "A real village" asks for goal/5 (200) and the last quest for the goal (1000). Each gives faith, and finishing them all shows the win screen (play continues).
+  - Quests have stable ids. Saves store `qv` (`QUEST_VERSION`); `remapQuest()` maps an index from an older chain to the same quest in today's chain (v2 saves and pre-phase-9 v3 saves use chain 1). New quests that land before the player's current one are skipped. When you change the chain, bump `QUEST_VERSION` and add the old id list to `CHAINS`.
+- **The pet pen** (phase 9) is a unique building (12 wood, no workers; `UNIQUE` in defs, also the Hearth). It needs a pet.
+  - A tired pet within 30 tiles walks to the pen to sleep (unless it's told to Stay more than 8 tiles away). Asleep in the pen it rests ×`penRest` (2) and gains love.
+  - Waking in the pen fertilises finished farms within `penFertR` (6) tiles for `fertSeconds`, and clears its droppings.
+  - The pen's trough also works as the store when the pet is hungry, like the Hearth. The pet card's Pen button sends it home to Stay.
+- **More tricks** (phase 9): Level and Rise are learned by watching those blessings, and Build by watching you place two buildings, each within 10 tiles.
+  - Level smooths a gentle slope near homes. Rise turns shallow sea by the shore into beach. Build adds `petBuild` (0.25) to a site.
+  - Tricks only start where they'd do some good (`trickTarget`). Land tricks go through `safeReshape()`: if any home or building would lose its footing, the heights are restored and nothing happens.
 - **The prototype's save is migrated** when there's no 3D save but `hearthvale-v2` exists. Its 64×64 island (65² vertices) is set into a cleared sea basin at offset 32 on a freshly generated planet, and the v2 save is left untouched. The smoke test does this end to end: it plays `/legacy/`, which saves on pagehide, then loads `/`.
 - **PWA.** vite-plugin-pwa provides the manifest and a service worker that precaches everything: game code, Rapier's WASM (inlined in its JS chunk, so `maximumFileSizeToCacheInBytes` is 8 MB), the font and the prototype. It auto-updates. `/legacy/` is excluded from the navigation fallback, so it stays the prototype. An Install button appears when the browser fires `beforeinstallprompt`. The smoke test reloads offline and checks both pages start.
 - **Sound** is fully synthesised (no audio files), so there are no licences to track. It's unlocked on the first pointer or key press, and the on/off setting is saved in localStorage (`hearthvale-sound`).
@@ -149,6 +157,6 @@ legacy/       the 2D prototype (design reference; do not edit)
 - save: localStorage `hearthvale-v2`. The 3D game will use `hearthvale-v3` and migrate v2 (phase 6).
 
 ## Ideas queued
-- A pet pen building where the pet sleeps; more pet tricks; a rival tribe.
-- Local AI-generated music or voices for the pet, made offline with free tools and shipped as our own assets.
+- A rival tribe (phase 10).
+- Local AI-generated music or voices for the pet, made offline with free tools and shipped as our own assets. Parked by the user ("skip for now"). Their PC has an AMD Radeon RX 7900 XTX (24 GB), so prefer tools that run on AMD (ROCm on Linux/WSL, or DirectML/ONNX on Windows) over CUDA-only ones.
 - Move the `balance.ts` tunables to JSON for tuning without code.
