@@ -33,6 +33,19 @@ export class Ui {
     $('bHelp').onclick = () => this.toggleHelp(true);
     $('bSound').onclick = () => this.setSound(this.h.toggleSound());
     $('bKeep').onclick = () => $('win').classList.remove('show');
+    // Offer to install the game as an app when the browser allows it (Chrome/Edge on desktop).
+    let deferred: (Event & { prompt(): Promise<void> }) | null = null;
+    addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferred = e as Event & { prompt(): Promise<void> };
+      $('bInstall').hidden = false;
+    });
+    $('bInstall').onclick = () => {
+      deferred?.prompt();
+      deferred = null;
+      $('bInstall').hidden = true;
+    };
+    addEventListener('appinstalled', () => ($('bInstall').hidden = true));
     $('quest').onclick = () => $('quest').classList.toggle('open');
     $('bStart').onclick = () => {
       this.toggleHelp(false);
