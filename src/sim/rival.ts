@@ -13,7 +13,7 @@ import {
 } from './village';
 import { waterDist } from './worldgen';
 import { N, clamp, idx, tdist, wrap, type Home, type Rival, type State, type Struct, type Vill } from './world';
-import { centreX, centreY, mkV, validSite } from './village';
+import { centreX, centreY, mkV, validSite, voice } from './village';
 
 /** Saves from before the Red tribe: everything already in the world is ours. */
 export function fixTribes(S: State): void {
@@ -161,6 +161,7 @@ export function stepRival(c: PetCtx, dt: number): void {
     Rv.festIn = B.rivalFestEvery * (0.8 + c.rng.next() * 0.4);
     Rv.fest = B.rivalFestSeconds;
     spark(c, centreX(RH), centreY(RH), 'note', 6);
+    voice(c, 'red_fest', centreX(RH), centreY(RH));
     c.emit({ k: 'toast', msg: 'The Red tribe is holding a festival! Bless their land now: they are twice as easy to impress' });
   }
   // once they're a proper village, their elder raises a shrine by the Hearth

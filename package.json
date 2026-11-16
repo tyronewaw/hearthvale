@@ -15,7 +15,9 @@
     "balance": "vitest run --config vitest.balance.config.ts",
     "perf": "node scripts/perf.mjs",
     "petshots": "node scripts/petshots.mjs",
-    "buildshots": "node scripts/buildshots.mjs"
+    "buildshots": "node scripts/buildshots.mjs",
+    "voicesheet": "node scripts/voicesheet.mjs",
+    "voices": "node scripts/voices.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

@@ -51,6 +51,17 @@ export class Audio {
     return this.on;
   }
 
+  /** The running context and the master bus, for other players (voices); null until unlocked or when muted. */
+  out(): { ac: AudioContext; bus: GainNode } | null {
+    const ac = this.ready();
+    return ac && this.master ? { ac, bus: this.master } : null;
+  }
+
+  /** The context once unlocked (even when muted), for decoding ahead of time. */
+  context(): AudioContext | null {
+    return this.ac;
+  }
+
   private ready(): AudioContext | null {
     return this.on && this.ac && this.ac.state === 'running' ? this.ac : null;
   }

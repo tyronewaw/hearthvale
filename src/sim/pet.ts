@@ -8,7 +8,7 @@ import { BALANCE } from './balance';
 import { bloom, festival, rain } from './blessings';
 import { BMAX, STRUCTS } from './defs';
 import { isWater, setVertices, tileFlat } from './terrain';
-import { builtPen, centreX, centreY, findTile, finish, hearth, homeById, impress, mkV, sizeOf, spark, structById, structOk, type Ctx } from './village';
+import { builtPen, centreX, centreY, findTile, finish, hearth, homeById, impress, mkV, sizeOf, spark, structById, structOk, voice, type Ctx } from './village';
 import { clamp, idx, nightF, tdist, wd, wrap, type Held, type State, type Vill } from './world';
 
 export type PetKind = 'sheep' | 'monkey' | 'chicken';
@@ -381,6 +381,7 @@ export function finishAct(c: PetCtx, a: PetAct): 'keep' | void {
     if (R.next() < 0.6) P.poop = 15 + R.next() * 15;
   } else if (a.id === 'play') {
     n.fun = Math.min(100, n.fun + 45);
+    voice(c, 'petplay', P.x, P.y, a.v ?? 0);
     S.faith += 2;
     for (const v of S.vills)
       if (tdist(v.x, v.y, P.x, P.y) < 2) {

@@ -7,6 +7,7 @@ import { BALANCE } from './sim/balance';
 import { SAVE_KEY, deserialize, serialize } from './sim/save';
 import { V2_KEY, migrateV2 } from './sim/migrate';
 import { Audio } from './audio/audio';
+import { Voices, type Listener } from './audio/voices';
 import { TOOL } from './sim/defs';
 import { Sim } from './sim/sim';
 import { beliefRate, rivalMood } from './sim/rival';
@@ -117,7 +118,14 @@ let lastGrip: Vector3 | null = null;
 let lastThrow: unknown = null, carryFrames = 0, noTarget = 0;
 
 const audio = new Audio();
-for (const ev of ['pointerdown', 'keydown'] as const) addEventListener(ev, () => audio.unlock(), { passive: true });
+const voices = new Voices(audio);
+for (const ev of ['pointerdown', 'keydown'] as const)
+  addEventListener(ev, () => {
+    audio.unlock();
+    voices.preload();
+  }, { passive: true });
+/** Where the player is listening from: the camera's focus, for voice volume and panning. */
+const listener = (): Listener => ({ fx: rig.fx, fz: rig.fz, dist: rig.dist, right: rig.axes().right, wd });
 
 let tool: ToolId = 'hand';
 let bsel: StructKind = 'farm';
@@ -134,6 +142,7 @@ const ui = new Ui({
   togglePause,
   cycleSpeed: () => (speed = speed === 1 ? 2 : speed === 2 ? 4 : 1),
   toggleSound: () => audio.toggle(),
+  toggleVoices: () => voices.toggle(),
   findRival: () => {
     const RH = rivalHearth(sim.S);
     if (!RH) return;
@@ -161,6 +170,7 @@ const ui = new Ui({
   },
 });
 ui.setSound(audio.on);
+ui.setVoices(voices.on, voices.count > 0);
 
 const petCard = new PetCard({
   choose: (kind, name) => {
@@ -303,7 +313,21 @@ function release(): void {
     const l = ballisticLanding(sim.S, x, y, z, v.vx, v.vy, v.vz, v.thrown);
     sim.landed(obj, l.x, l.z, v.thrown);
   }
-  if (v.thrown) sim.emit({ k: 'sfx', id: 'throw' });
+  if (v.thrown) {
+    sim.emit({ k: 'sfx', id: 'throw' });
+    if (held.k === 'v') voices.say('throw', x, z, held.v.id, listener());
+  }
+}
+
+/** Now and then someone near the camera chats quietly (only close up, and only with voices recorded). */
+let chatT = 3;
+function chatter(rdt: number): void {
+  if ((chatT -= rdt) > 0) return;
+  chatT = 2.5 + Math.random() * 4;
+  if (!voices.count || rig.dist > 30) return;
+  const S = sim.S, near = S.vills.filter((v) => v.dizzy <= 0 && Math.hypot(wd(rig.fx, v.x), wd(rig.fz, v.y)) < 10);
+  const v = near[Math.floor(Math.random() * near.length)];
+  if (v) voices.say(v.tribe === 1 ? 'red_chatter' : 'chatter', v.x, v.y, v.id, listener(), 0.55);
 }
 
 /** Where the hand hovers and how it's posed, from what the player is doing. */
@@ -455,6 +479,7 @@ function frame(now: number): void {
     R.onEvent(e);
     if (e.k === 'toast') ui.toast(e.msg);
     else if (e.k === 'sfx') audio.sfx(e.id);
+    else if (e.k === 'voice') voices.say(e.id, e.x, e.y, e.who, listener());
     else if (e.k === 'ui') {
       redrawBar();
       ui.drawQuest(sim.S);
@@ -507,7 +532,10 @@ function frame(now: number): void {
     const RH = rivalHearth(sim.S);
     if (RH && tdist(RH.x, RH.y, rig.fx, rig.fz) < 18) sim.metRival();
   }
-  if (!paused) audio.music(rdt, R.sky.night > 0.5, sim.S.fest > 0);
+  if (!paused) {
+    audio.music(rdt, R.sky.night > 0.5, sim.S.fest > 0);
+    chatter(rdt);
+  }
   petCard.update(sim.S, rdt);
   if ((tipT -= rdt) <= 0) {
     tipT = 0.12;
