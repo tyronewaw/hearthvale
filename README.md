@@ -19,6 +19,7 @@ It is being rebuilt in phases, and each phase ends playable.
 9. ✅ Pet pen and new tricks (Level, Rise, Build)
 10. ✅ The Red tribe: a rival people you win over, Black & White style
 11. ✅ Land borders on the ground; Red festivals, a Red shrine, and tooltips that say what would win them over
+12. ✅ Pets change as they grow: lamb to curly-horned ram, baby monkey to wise old monkey, chick to rooster
 
 ## Controls (so far)
 - **Hand** (`1`): grab villagers, trees and rocks. Let go gently to drop, or flick and let go to throw: they arc, bounce, splash and get up a little dizzy. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.

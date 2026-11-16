@@ -3,7 +3,7 @@
 A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and keyboard first; phones only need to keep working, with no new phone-specific work). It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. Phase 9 (pet pen and more tricks), phase 10 (the Red tribe, won over Black & White style) and phase 11 (land borders on the ground, Red festivals and shrine) were chosen by the user and built after that. Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. Phase 9 (pet pen and more tricks), phase 10 (the Red tribe, won over Black & White style), phase 11 (land borders on the ground, Red festivals and shrine) and phase 12 (pets look different at each growth stage) were chosen by the user and built after that. Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
@@ -12,6 +12,7 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
 - `npm run smoke` builds, serves, and plays in headless Chromium through `window.__hv`. It fails on any console error and saves screenshots to `shots/` (gitignored).
 - `node scripts/icons.mjs` regenerates `public/icons/*.png` (a pixel-art hut drawn in code) in headless Chromium.
 - `npm run perf` measures draw calls, triangles and frame time on the high and medium tiers at three zooms, with a grown village (software GL, so trust the counts, not the ms).
+- `npm run petshots` renders every pet species at every growth stage into `shots/pets-growth.png` (3×3), for reviewing pet art.
 - `npm run balance` runs a headless scripted player for `DAYS` (default 30) and writes a day-by-day table to `shots/balance.txt`. It takes about 3 s.
 - Add `?fresh` to start a new world instead of loading the save, and `?nosave` to stop autosaving.
 
@@ -63,8 +64,10 @@ src/render/   three.js only, and it reads sim state
   effects.ts  rain clouds and streaks, festival bunting and lanterns (ours, and the Red tribe's in their colours), fireflies, blessing radius cursor
   border.ts   land borders on the ground: the 0 contour of each tribe's influenceField, as instanced segments (B toggles)
   contour.ts  marching squares on the wrapped vertex grid (pure, tested)
-  pets.ts     PetView: sheep / monkey / chicken built in code, ×0.6 / ×1.15 / ×1.75 by stage, walk
-              cycle, bob, squash-and-stretch, eat/sleep/dance/play poses, nature halo, thought bubble
+  pets.ts     PetView: sheep / monkey / chicken built in code, a different look per stage (lamb / sheep /
+              ram with horns and bell; baby / monkey / grand old monkey with crest, beard, curled tail;
+              chick / hen / rooster with tall comb, ruff and tail fan), ×0.6 / ×1.15 / ×1.75 by stage,
+              walk cycle, bob, squash-and-stretch, eat/sleep/dance/play poses, nature halo, thought bubble
   hand.ts     the god hand: code-built right hand, jointed fingers, blended poses
               (open, reach, point, grip, hold, stroke, slap), leans with motion, casts a shadow
   scale.ts    sim→world mapping: STEP per level, SEA_FLOOR, WATER_Y, surfaceY/standY
@@ -176,7 +179,7 @@ legacy/       the 2D prototype (design reference; do not edit)
 - Keep `src/sim` deterministic: seeded `Rng`, with no wall-clock time.
 - Write tests for every ported rule in `src/sim/*.test.ts`. After changing render or input, run `npm run smoke` and look at the screenshots.
 - Record every third-party asset and its licence in `ASSETS.md`. Only CC0, or licences that allow redistribution, after checking.
-- Branch per phase (`phase-N-…`), draft PR, and the user reviews before merging. Pushing to `main` deploys to GitHub Pages (`.github/workflows/deploy.yml`); CI runs on branches and PRs.
+- Branch per phase (`phase-N-…`) and a draft PR. **The user said "just auto merge"**: once `npm run check`, `npm run smoke` and CI are green, mark the PR ready and merge it yourself (merge commit), then tell the user it's live. Pushing to `main` deploys to GitHub Pages (`.github/workflows/deploy.yml`); CI runs on branches and PRs.
 
 ## Prototype map (where to find rules in legacy/index.html)
 - constants: `BMAX`/`BTH` (home sizes and field thresholds), `ROLES`, `STRUCTS`, `TOOLS`, `PETS`, `HABITS`, `QUESTS`
