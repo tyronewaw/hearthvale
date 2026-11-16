@@ -41,7 +41,8 @@ export interface HvDebug {
   physicsReady(): boolean;
   lastThrow(): unknown;
   /** Throw whatever the hand holds with a given ground velocity (deterministic, for tests). */
-  throwHeld(vx: number, vz: number): void;
+  /** Throw whatever the hand holds with this velocity; returns where it left the hand (tiles). */
+  throwHeld(vx: number, vz: number): { x: number; z: number } | null;
   /** Jump the clock to a time of day (0..1) on the current day, for screenshots. */
   timeOfDay(t: number): void;
   save(): void;
@@ -496,11 +497,12 @@ window.__hv = {
   lastThrow: () => lastThrow,
   throwHeld: (vx, vz) => {
     const held = sim.S.held;
-    if (!held) return;
+    if (!held) return null;
     const g = R.hand.grip, obj = sim.release()!, sp = Math.hypot(vx, vz);
     const y = held.k === 'v' ? g.y - 0.52 + VILL_CENTRE : g.y - 0.5;
     if (physics) physics.launch(obj, wrap(g.x), y, wrap(g.z), vx, 2.5 + sp * 0.3, vz, true, 1);
     else sim.landed(obj, wrap(g.x + vx), wrap(g.z + vz), true);
+    return { x: wrap(g.x), z: wrap(g.z) };
   },
 };
 

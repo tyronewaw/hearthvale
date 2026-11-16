@@ -197,7 +197,9 @@ try {
   if (!target) errors.push('hand: could not pick up a villager to throw');
   else {
     await frames(desk, 3);
-    await desk.evaluate(() => window.__hv.throwHeld(-10, -6));
+    // measure from where it left the hand (the hand need not be over the villager's old spot)
+    const from = await desk.evaluate(() => window.__hv.throwHeld(-10, -6));
+    if (from) [target.vx, target.vz] = [from.x, from.z];
     await frames(desk, 3);
     await desk.screenshot({ path: 'shots/hand-throw-flight.png' });
     if (!(await waitLanded('throws', target.stat.throws))) errors.push('hand: thrown villager never landed as a throw');
