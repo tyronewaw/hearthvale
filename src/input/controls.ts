@@ -21,6 +21,8 @@ export interface ControlsHost {
   /** A plain left click on the ground; return true to consume it (e.g. Send mode). */
   click(hit: GroundHit): boolean;
   togglePause(): void;
+  /** Show or hide the land borders (B). */
+  toggleBorder(): void;
   toggleHelp(): void;
 }
 
@@ -262,6 +264,7 @@ export class Controls {
       e.preventDefault();
       this.host.togglePause();
     } else if (k === 'h') this.host.toggleHelp();
+    else if (k === 'b') this.host.toggleBorder();
     else if (k === '+' || k === '=') this.rig.zoom -= 0.08;
     else if (k === '-') this.rig.zoom += 0.08;
     else this.keys.add(k);

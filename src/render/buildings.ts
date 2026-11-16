@@ -14,6 +14,7 @@ import { surfaceY } from './scale';
 const CROP = ['#96d06c', '#62a446', '#e4c65c', null];
 const SOIL = ['#88623e', '#88623e', '#8a6440', '#d6d4dc'];
 const m4 = new Matrix4(), l4 = new Matrix4(), q4 = new Quaternion(), v3 = new Vector3(), s3 = new Vector3(), up = new Vector3(0, 1, 0);
+const WHITE = new Color('#ffffff'), RED_CRYSTAL = new Color('#ff8a6a');
 const tmpC = new Color(), BLUE_C = new Color(TRIBE_BLUE[0]), RED_C = new Color(TRIBE_RED[0]), sway = new Quaternion();
 
 function poolTexture(): CanvasTexture {
@@ -193,7 +194,8 @@ export class Buildings {
       if (s.k === 'shrine') {
         q4.setFromAxisAngle(up, time * 0.8);
         l4.compose(v3.set(0, 0.42 + Math.sin(time * 2 + s.id) * 0.04, 0), q4, s3.setScalar(1)).premultiply(base);
-        this.crystals.setMatrixAt(nc++, l4);
+        this.crystals.setMatrixAt(nc, l4);
+        this.crystals.setColorAt(nc++, s.tribe === 1 ? RED_CRYSTAL : WHITE); // the Red shrine glows warm
       }
     }
     this.homes.forEach((m, i) => {
@@ -209,6 +211,7 @@ export class Buildings {
       m.instanceMatrix.needsUpdate = true;
     }
     if (this.pennants.instanceColor) this.pennants.instanceColor.needsUpdate = true;
+    if (this.crystals.instanceColor) this.crystals.instanceColor.needsUpdate = true;
     this.glowMat.opacity = Math.min(1, night * 1.2);
     this.poolMat.opacity = night * 0.55;
     if (nearHearth) {

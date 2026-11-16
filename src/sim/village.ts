@@ -505,6 +505,7 @@ function stepWorker(c: Ctx, w: Vill, dt: number, night: number): void {
 }
 
 export function finish(c: Ctx, s: Struct): void {
+  if (s.tribe !== 0) return; // the Red tribe's buildings finish quietly
   toast(c, STRUCTS[s.k].name + ' is built');
   sfx(c, 'build');
   if (s.k === 'farm') calcCrops(c);
@@ -718,11 +719,37 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
 
 // ---------------------------------------------------------------- the Red tribe
 
-/** Inside our land: near one of our homes (3 + level tiles) or buildings (the Hearth 8, others 5). */
-export function inInfluence(S: State, x: number, y: number): boolean {
-  for (const b of S.homes) if (b.tribe === 0 && tdist(b.x + 0.5, b.y + 0.5, x, y) <= 3 + b.lv) return true;
-  for (const s of S.structs) if (s.tribe === 0 && tdist(s.x + 0.5, s.y + 0.5, x, y) <= (s.k === 'hearth' ? 8 : 5)) return true;
+/** A tribe's land is the union of discs round its homes (3 + level tiles) and buildings (the Hearth 8, others 5): [x, y, r]. */
+export function influenceSources(S: State, tribe: Tribe): [number, number, number][] {
+  const out: [number, number, number][] = [];
+  for (const b of S.homes) if (b.tribe === tribe) out.push([b.x + 0.5, b.y + 0.5, 3 + b.lv]);
+  for (const s of S.structs) if (s.tribe === tribe) out.push([s.x + 0.5, s.y + 0.5, s.k === 'hearth' ? 8 : 5]);
+  return out;
+}
+
+/** Inside a tribe's land (ours by default). */
+export function inInfluence(S: State, x: number, y: number, tribe: Tribe = 0): boolean {
+  for (const [cx, cy, r] of influenceSources(S, tribe)) if (tdist(cx, cy, x, y) <= r) return true;
   return false;
+}
+
+/**
+ * A tribe's land as a field on the N×N vertex grid: how far inside the nearest disc each
+ * vertex is (r − d; negative outside). The renderer draws its 0 contour as the border, so
+ * the line shows exactly where inInfluence() changes.
+ */
+export function influenceField(S: State, tribe: Tribe): Float32Array {
+  const F = new Float32Array(N * N).fill(-99);
+  for (const [cx, cy, r] of influenceSources(S, tribe)) {
+    const R = Math.ceil(r) + 2;
+    for (let dy = -R; dy <= R; dy++)
+      for (let dx = -R; dx <= R; dx++) {
+        const vx = Math.round(cx) + dx, vy = Math.round(cy) + dy, i = idx(vx, vy);
+        const f = r - Math.hypot(wd(cx, vx), wd(cy, vy));
+        if (f > F[i]!) F[i] = f;
+      }
+  }
+  return F;
 }
 
 /** A Red villager joins us. */
@@ -757,6 +784,8 @@ export function convertHome(c: Ctx, b: Home): void {
  */
 export function impress(c: Ctx, x: number, y: number, r: number, amount: number): number {
   let n = 0;
+  // during their festival they're in a good mood: kindness counts double
+  if (amount > 0 && c.S.rival && c.S.rival.fest > 0) amount *= BALANCE.rivalFestJoy;
   for (const b of c.S.homes.slice()) {
     if (b.tribe !== 1 || tdist(b.x + 0.5, b.y + 0.5, x, y) > r) continue;
     n++;

@@ -8,11 +8,13 @@ import { hash2, Rng } from '../sim/rng';
 import { idx, season, wd, wrap, type State } from '../sim/world';
 import { bent } from './bend';
 import { castsShadow, worldMat } from './materials';
-import { TRIBE_BLUE } from './models';
+import { TRIBE_BLUE, TRIBE_RED } from './models';
 import { standY, yOf } from './scale';
 
 const m4 = new Matrix4(), q4 = new Quaternion(), v3 = new Vector3(), s3 = new Vector3(), up = new Vector3(0, 1, 0);
 const FLAG = [TRIBE_BLUE[0]!, '#d9574a', '#e3b33c', '#6aaf5a'].map((c) => new Color(c));
+/** The Red tribe's own festival bunting. */
+const FLAG_RED = [TRIBE_RED[0]!, '#f2b632', '#e3793c', '#fff1d6'].map((c) => new Color(c));
 
 function cloudGeo(): BufferGeometry {
   const parts = [[0, 0, 0, 0.9], [0.8, -0.1, 0.2, 0.7], [-0.8, -0.1, -0.1, 0.65], [0.2, 0.3, -0.3, 0.55], [-0.3, 0.05, 0.5, 0.55], [0.4, 0, 0.6, 0.5]]
@@ -108,19 +110,23 @@ export class Effects {
     this.clouds.count = nc;
     this.drops.count = nd;
 
-    // Festival: bunting round every home's eaves, and lanterns that glow after dark.
+    // Festival: bunting round every home's eaves, and lanterns that glow after dark. The Red
+    // tribe's own festivals dress only their homes, in their colours.
     let nf = 0, nl = 0;
-    if (S.fest > 0) {
-      const fade = Math.min(1, S.fest / 2);
+    const redFest = S.rival && !S.rival.united ? S.rival.fest : 0;
+    if (S.fest > 0 || redFest > 0) {
       for (const b of S.homes) {
         if (b.lv < 1) continue;
+        const theirs = b.tribe === 1 && redFest > 0 && !(S.fest > 0);
+        if (!(S.fest > 0) && !theirs) continue;
+        const fade = Math.min(1, (theirs ? redFest : S.fest) / 2), cols = theirs ? FLAG_RED : FLAG;
         const cx = fx + wd(fx, b.x + 0.5), cz = fz + wd(fz, b.y + 0.5), gy = standY(S, b.x + 0.5, b.y + 0.5);
         const rr = 0.42 + b.lv * 0.08, h = 0.35 + b.lv * 0.05, n = 8 + b.lv * 2;
         for (let i = 0; i < n; i++) {
           const a = (i / n) * Math.PI * 2 + time * 0.2;
           q4.setFromAxisAngle(up, -a);
           this.flags.setMatrixAt(nf, m4.compose(v3.set(cx + Math.cos(a) * rr, gy + h + Math.sin(time * 4 + i) * 0.02, cz + Math.sin(a) * rr), q4, s3.setScalar(fade)));
-          this.flags.setColorAt(nf++, FLAG[(i + b.id) % 4]!);
+          this.flags.setColorAt(nf++, cols[(i + b.id) % 4]!);
           if (i % 3 === 0) this.lanterns.setMatrixAt(nl++, m4.compose(v3.set(cx + Math.cos(a + 0.2) * rr, gy + h - 0.1, cz + Math.sin(a + 0.2) * rr), q4.identity(), s3.setScalar(fade)));
         }
       }

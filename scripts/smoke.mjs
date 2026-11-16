@@ -383,6 +383,7 @@ try {
     await pg.goto(`${BASE}/?seed=42&nohelp&nopet&sandbox&nosave`);
     await pg.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
     await pg.evaluate(() => window.__hv.ff(150 * 1.5));
+    await pg.evaluate(() => localStorage.removeItem('hearthvale-border'));
     // the HUD's Red tribe row takes you to their village
     await pg.click('#hrr');
     await pg.evaluate(() => { const hv = window.__hv, S = hv.sim().S; S.t = Math.floor(S.t / 150) * 150 + 0.42 * 150; hv.rig.zoom = 0.32; hv.rig.apply(); });
@@ -393,6 +394,19 @@ try {
       return { met: !!S.hinted.metRival, homes: S.homes.filter((b) => b.tribe === 1).length, people: S.vills.filter((v) => v.tribe === 1).length }; });
     console.log('red tribe', info);
     if (!info.met) errors.push('rival: clicking the Red tribe did not take us there');
+    // both borders are drawn, and B hides them
+    const borders = await pg.evaluate(() => window.__hv.renderer.border.counts);
+    console.log('border segments [ours, theirs]', borders);
+    if (!(borders[0] > 0 && borders[1] > 0)) errors.push(`rival: borders missing (${borders})`);
+    await pg.keyboard.press('b');
+    await frames(pg, 3);
+    if ((await pg.evaluate(() => window.__hv.renderer.border.counts)).some((n) => n > 0)) errors.push('rival: B did not hide the borders');
+    await pg.keyboard.press('b');
+    // a Red festival at dusk: their bunting and lanterns
+    await pg.evaluate(() => { const S = window.__hv.sim().S; S.rival.fest = 30; S.t = Math.floor(S.t / 150) * 150 + 0.78 * 150; });
+    await frames(pg, 12);
+    await pg.screenshot({ path: 'shots/rival-festival.png' });
+    await pg.evaluate(() => { const S = window.__hv.sim().S; S.rival.fest = 0; S.t = Math.floor(S.t / 150) * 150 + 0.42 * 150; });
     if (!info.homes) errors.push('rival: no Red homes');
     // win one home over: show a half-won pennant, then bless it until it joins
     const home = await pg.evaluate(() => { const S = window.__hv.sim().S, reds = S.homes.filter((b) => b.tribe === 1);

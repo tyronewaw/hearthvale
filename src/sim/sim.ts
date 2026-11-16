@@ -136,7 +136,7 @@ export class Sim implements Ctx, PetCtx {
     // (the Red tribe never goes hungry, grows a little slower and stops at rivalMax people)
     const wand = [0, 0], cap = [B.maxSettlers, B.rivalSettlers];
     for (const v of S.vills) if (v.type === 'settler') wand[v.tribe]!++;
-    const smRed = B.growSeason[se]! * B.rivalGrowth, redFull = S.rival && !S.rival.united ? tribePop(S, 1) >= B.rivalMax : true;
+    const smRed = B.growSeason[se]! * B.rivalGrowth * (S.rival && S.rival.fest > 0 ? B.rivalFestGrowth : 1), redFull = S.rival && !S.rival.united ? tribePop(S, 1) >= B.rivalMax : true;
     for (const b of S.homes) {
       if (b.tribe === 1 && redFull) continue;
       b.pop += homeGrowth(S, b, b.tribe === 1 ? smRed : sm) * dt;

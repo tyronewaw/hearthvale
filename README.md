@@ -18,6 +18,7 @@ It is being rebuilt in phases, and each phase ends playable.
 8. ✅ Installable PWA that plays offline
 9. ✅ Pet pen and new tricks (Level, Rise, Build)
 10. ✅ The Red tribe: a rival people you win over, Black & White style
+11. ✅ Land borders on the ground; Red festivals, a Red shrine, and tooltips that say what would win them over
 
 ## Controls (so far)
 - **Hand** (`1`): grab villagers, trees and rocks. Let go gently to drop, or flick and let go to throw: they arc, bounce, splash and get up a little dizzy. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.
@@ -29,7 +30,9 @@ It is being rebuilt in phases, and each phase ends playable.
 - **The Red tribe** lives on a far shore (click *Red tribe* in the top-left panel to look). Nobody fights. Win them over:
   - build big homes and Shrines near them, hold festivals, bless their land, and let a kind pet play nearby;
   - each of their homes' flags turns from red to blue as it warms to you;
-  - pick up their wanderers inside your land, or put them down there, and they join you.
+  - pick up their wanderers inside your land, or put them down there, and they join you;
+  - when they hold a festival, kindness counts double;
+  - glowing lines on the ground show your land (blue) and theirs (red); press `B` to show or hide them.
 - Wheel to zoom, `Q`/`E` or right-drag to turn, `WASD` to pan, `Space` to pause. The world saves itself in your browser, and a world from the 2D prototype carries over.
 
 ## Install
