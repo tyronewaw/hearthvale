@@ -194,7 +194,7 @@ export class GameRenderer {
     this.sky.update(S.t);
     const d = tod(S.t), dusk = Math.max(0, 1 - Math.abs(d - 0.25) / 0.05, 1 - Math.abs(d - 0.76) / 0.05);
     this.clouds.update(time, fx, fz, this.sky.night, dusk);
-    this.buildings.update(S, view.crops, fx, fz, time, view.dt, this.sky.night, se);
+    this.buildings.update(S, view.crops, fx, fz, time, view.dt, this.sky.night, se, cam.x, cam.z);
     this.buildings.setGhost(view.ghost?.kind ?? null, S, view.ghost?.tile ?? null, view.ghost?.ok ?? false, fx, fz);
 
     // The god hand, and what it holds hanging from its grip.

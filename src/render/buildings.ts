@@ -6,8 +6,8 @@ import { STRUCT_KINDS, type StructKind } from '../sim/defs';
 import { hash2 } from '../sim/rng';
 import { N, tdist, wd, type State } from '../sim/world';
 import { bent } from './bend';
-import { castsShadow, worldMat } from './materials';
-import { TRIBE_BLUE, TRIBE_RED, crystalGeo, flameGeo, homeModels, pennantGeo, scaffoldGeo, structModels, totemGeo, tuftGeo, type Model } from './models';
+import { castsShadow, tintable, worldMat } from './materials';
+import { TRIBE_BLUE, TRIBE_RED, crystalGeo, flameGeo, frameGeo, homeModels, siteGeo, structModels, totemGeo, tuftGeo, type Model } from './models';
 import type { Particles } from './particles';
 import { surfaceY } from './scale';
 
@@ -15,7 +15,12 @@ const CROP = ['#96d06c', '#62a446', '#e4c65c', null];
 const SOIL = ['#88623e', '#88623e', '#8a6440', '#d6d4dc'];
 const m4 = new Matrix4(), l4 = new Matrix4(), q4 = new Quaternion(), v3 = new Vector3(), s3 = new Vector3(), up = new Vector3(0, 1, 0);
 const WHITE = new Color('#ffffff'), RED_CRYSTAL = new Color('#ff8a6a');
-const tmpC = new Color(), BLUE_C = new Color(TRIBE_BLUE[0]), RED_C = new Color(TRIBE_RED[0]), sway = new Quaternion();
+const tmpC = new Color(), BLUE_C = new Color(TRIBE_BLUE[0]), RED_C = new Color(TRIBE_RED[0]);
+/** Homes further than this (horizontally) from the camera use the simpler far models. */
+const FAR = 30;
+/** Seconds a new home takes to rise from its frame. */
+const RISE = 1.4;
+const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 function poolTexture(): CanvasTexture {
   const c = document.createElement('canvas');
@@ -52,10 +57,18 @@ function place(S: State, x: number, y: number, fx: number, fz: number, yaw: numb
  */
 export class Buildings {
   private homeM: Model[] = homeModels();
+  /** Simpler homes for far away (more than FAR units from the camera). */
+  private homeFarM: Model[] = homeModels(true);
   private structM: Record<StructKind, Model> = structModels();
   private homes: InstancedMesh[];
   private structs: Record<StructKind, InstancedMesh>;
-  private scaffold: InstancedMesh;
+  private homesFar: InstancedMesh[];
+  /** Building sites: stakes and a wood pile, then a timber frame while the walls go up. */
+  private sites: InstancedMesh;
+  private frames: InstancedMesh;
+  /** When each home was first seen (for rising) and its level (for level-up puffs). */
+  private seen = new Map<number, { t: number; lv: number }>();
+  private started = false;
   private glow: InstancedMesh;
   private glowMat: MeshBasicMaterial;
   private pools: InstancedMesh;
@@ -65,8 +78,6 @@ export class Buildings {
   private soil: InstancedMesh;
   private tufts: InstancedMesh;
   private totem: Mesh;
-  /** A tribe pennant on every home (red ones turn blue as they're won over) and on the Red Hearth. */
-  private pennants: InstancedMesh;
   private ghost: Mesh;
   private ghostMat: MeshLambertMaterial;
   private ghostKind: StructKind | null = null;
@@ -75,9 +86,13 @@ export class Buildings {
 
   constructor(scene: Scene, private particles: Particles) {
     const mat = worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-    this.homes = this.homeM.map((m) => im(scene, m.geo, mat, N * N / 8, true));
-    this.structs = Object.fromEntries(STRUCT_KINDS.map((k) => [k, im(scene, this.structM[k].geo, mat, 256, true)])) as Record<StructKind, InstancedMesh>;
-    this.scaffold = im(scene, scaffoldGeo(), mat, 256, true);
+    // buildings: one draw call per model, with paint, cloth and flags in the tribe's colour
+    const tmat = tintable(worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+    this.homes = this.homeM.map((m) => im(scene, m.geo, tmat, N * N / 8, true));
+    this.homesFar = this.homeFarM.map((m) => im(scene, m.geo, tmat, N * N / 8, true));
+    this.structs = Object.fromEntries(STRUCT_KINDS.map((k) => [k, im(scene, this.structM[k].geo, tmat, 256, true)])) as Record<StructKind, InstancedMesh>;
+    this.sites = im(scene, siteGeo(), mat, 256, false);
+    this.frames = im(scene, frameGeo(), mat, 512, true);
 
     this.glowMat = bent(new MeshBasicMaterial({ color: '#ffcf70', transparent: true, opacity: 0, depthWrite: false }));
     this.glow = im(scene, new PlaneGeometry(1, 1), this.glowMat, N * N / 2, false);
@@ -91,7 +106,6 @@ export class Buildings {
     this.crystals = im(scene, crystalGeo(), bent(new MeshBasicMaterial({ vertexColors: true })), 64, false);
     this.soil = im(scene, new BoxGeometry(0.86, 0.03, 0.86), worldMat(new MeshLambertMaterial({ flatShading: true })), N * N / 2, false);
     this.tufts = im(scene, tuftGeo(), worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true })), N * N * 2, false);
-    this.pennants = im(scene, pennantGeo(), worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true })), N * N / 8 + 64, false);
     this.totem = new Mesh(totemGeo(), mat);
     castsShadow(this.totem);
     this.totem.frustumCulled = false;
@@ -117,9 +131,11 @@ export class Buildings {
     this.ghostMat.color.set(ok ? '#9bf07a' : '#ff6a50');
   }
 
-  update(S: State, crops: Set<number>, fx: number, fz: number, time: number, dt: number, night: number, season: number): void {
-    const counts = new Array(6).fill(0);
-    let ng = 0, np = 0, nf = 0, nc = 0, nsc = 0, npn = 0;
+  update(S: State, crops: Set<number>, fx: number, fz: number, time: number, dt: number, night: number, season: number, camX = fx, camZ = fz): void {
+    const counts = new Array(6).fill(0), far = new Array(6).fill(0);
+    let ng = 0, np = 0, nf = 0, nc = 0, nsite = 0, nfr = 0;
+    const now = time, first = !this.started; // real seconds (dt is capped per frame, so slow frames would stall it)
+    this.started = true;
     const sc: Record<string, number> = {};
     const view = 70; // only emit smoke near the camera
     const addGlows = (model: Model, base: Matrix4) => {
@@ -140,42 +156,63 @@ export class Buildings {
       this.smokeT.set(id, t);
     };
 
+    // Each home: rising inside a timber frame when it's new, a puff of dust when it grows.
+    const alive = new Set<number>();
     for (const b of S.homes) {
+      alive.add(b.id);
       const model = this.homeM[b.lv]!, yaw = ((hash2(b.id, 3) % 4) * Math.PI) / 2 + ((hash2(b.id, 5) % 40) - 20) / 100;
-      const base = place(S, b.x, b.y, fx, fz, yaw).clone();
-      this.homes[b.lv]!.setMatrixAt(counts[b.lv]++, base);
-      if (night > 0.05) addGlows(model, base);
+      let rec = this.seen.get(b.id);
+      if (!rec) this.seen.set(b.id, (rec = { t: first ? -99 : now, lv: b.lv }));
+      const rise = smooth((now - rec.t) / RISE);
+      const base = place(S, b.x, b.y, fx, fz, yaw, Math.max(0.04, rise)).clone();
+      if (rec.lv !== b.lv) {
+        if (b.lv > rec.lv && tdist(b.x, b.y, fx, fz) < view) {
+          v3.setFromMatrixPosition(base);
+          this.particles.emit('puff', v3.x, v3.y + 0.2, v3.z, 8);
+        }
+        rec.lv = b.lv;
+      }
+      if (rise < 1) {
+        l4.compose(v3.setFromMatrixPosition(base), q4.setFromAxisAngle(up, yaw), s3.set(model.r * 0.85, model.h * 0.9, model.r * 0.85));
+        this.frames.setMatrixAt(nfr++, l4);
+      }
+      const isFar = Math.hypot(base.elements[12] - camX, base.elements[14] - camZ) > FAR;
+      const n = isFar ? far[b.lv]++ : counts[b.lv]++, M = (isFar ? this.homesFar : this.homes)[b.lv]!;
+      M.setMatrixAt(n, base);
+      M.setColorAt(n, b.tribe === 1 ? tmpC.copy(RED_C).lerp(BLUE_C, b.bel / 100) : BLUE_C);
+      if (night > 0.05 && rise >= 1) addGlows(model, base);
       if (night > 0.05 && np < this.pools.instanceMatrix.count) {
         l4.compose(v3.set(base.elements[12], base.elements[13] + 0.03, base.elements[14]), q4.identity(), s3.setScalar(model.r * 3));
         this.pools.setMatrixAt(np++, l4);
       }
-      smoke(b.id, model, base, b.x + 0.5, b.y + 0.5);
-      sway.setFromAxisAngle(up, Math.sin(time * 1.7 + b.id) * 0.5 + b.id);
-      l4.compose(v3.set(0, model.h - 0.14, 0), sway, s3.setScalar(1.35)).premultiply(base);
-      this.pennants.setMatrixAt(npn, l4);
-      this.pennants.setColorAt(npn++, b.tribe === 1 ? tmpC.copy(RED_C).lerp(BLUE_C, b.bel / 100) : BLUE_C);
+      if (rise >= 1) smoke(b.id, model, base, b.x + 0.5, b.y + 0.5);
     }
+    if (this.seen.size > alive.size + 64) for (const id of [...this.seen.keys()]) if (!alive.has(id)) this.seen.delete(id);
 
     let nearHearth: Vector3 | null = null, hd = 1e9;
     for (const s of S.structs) {
       const model = this.structM[s.k], building = s.prog < 1;
       const yaw = ((hash2(s.id, 3) % 4) * Math.PI) / 2;
-      const base = place(S, s.x, s.y, fx, fz, yaw, building ? Math.max(0.08, s.prog) : 1).clone();
+      // Sites go up in stages: stakes and a wood pile (from 0), a timber frame (from 20%),
+      // then the building itself rising inside the frame (from 55%).
+      const up01 = building ? smooth((s.prog - 0.55) / 0.45) : 1;
+      if (building) {
+        const at = place(S, s.x, s.y, fx, fz, yaw).clone();
+        l4.compose(v3.setFromMatrixPosition(at), q4.setFromAxisAngle(up, yaw), s3.set(model.r, 1, model.r));
+        this.sites.setMatrixAt(nsite++, l4);
+        if (s.prog >= 0.2) {
+          const grow = smooth((s.prog - 0.2) / 0.15);
+          l4.compose(v3.setFromMatrixPosition(at), q4.setFromAxisAngle(up, yaw), s3.set(model.r * 0.9, Math.max(0.05, model.h * grow), model.r * 0.9));
+          this.frames.setMatrixAt(nfr++, l4);
+        }
+        if (up01 <= 0) continue;
+      }
+      const base = place(S, s.x, s.y, fx, fz, yaw, Math.max(0.04, up01)).clone();
       const i = (sc[s.k] = (sc[s.k] ?? 0) + 1) - 1;
       this.structs[s.k].setMatrixAt(i, base);
-      if (building) {
-        q4.setFromAxisAngle(up, 0);
-        l4.compose(v3.set(base.elements[12], base.elements[13], base.elements[14]), q4, s3.set(model.r * 0.9, 1, model.r * 0.9));
-        this.scaffold.setMatrixAt(nsc++, l4);
-        continue;
-      }
+      this.structs[s.k].setColorAt(i, s.tribe === 1 ? RED_C : BLUE_C);
+      if (building) continue;
       if (night > 0.05) addGlows(model, base);
-      if (s.tribe === 1) {
-        sway.setFromAxisAngle(up, Math.sin(time * 1.3 + s.id) * 0.4);
-        l4.compose(v3.set(0.45, 0, -0.45), sway, s3.setScalar(2.2)).premultiply(base);
-        this.pennants.setMatrixAt(npn, l4);
-        this.pennants.setColorAt(npn++, RED_C);
-      }
       if (model.fire) {
         const fl = 1 + Math.sin(time * 13 + s.id) * 0.12 + Math.sin(time * 7.3) * 0.08;
         l4.compose(v3.set(...model.fire), q4.identity(), s3.set(fl, fl * (1.1 + Math.sin(time * 9) * 0.15), fl)).premultiply(base);
@@ -193,24 +230,24 @@ export class Buildings {
       }
       if (s.k === 'shrine') {
         q4.setFromAxisAngle(up, time * 0.8);
-        l4.compose(v3.set(0, 0.42 + Math.sin(time * 2 + s.id) * 0.04, 0), q4, s3.setScalar(1)).premultiply(base);
+        const c = model.crystal ?? [0, 0.42, 0];
+        l4.compose(v3.set(c[0], c[1] + Math.sin(time * 2 + s.id) * 0.04, c[2]), q4, s3.setScalar(1)).premultiply(base);
         this.crystals.setMatrixAt(nc, l4);
         this.crystals.setColorAt(nc++, s.tribe === 1 ? RED_CRYSTAL : WHITE); // the Red shrine glows warm
       }
     }
-    this.homes.forEach((m, i) => {
-      m.count = counts[i];
-      m.instanceMatrix.needsUpdate = true;
-    });
-    for (const k of STRUCT_KINDS) {
-      this.structs[k].count = sc[k] ?? 0;
-      this.structs[k].instanceMatrix.needsUpdate = true;
-    }
-    for (const [m, n] of [[this.scaffold, nsc], [this.glow, ng], [this.pools, np], [this.flames, nf], [this.crystals, nc], [this.pennants, npn]] as const) {
+    const flush = (m: InstancedMesh, n: number) => {
       m.count = n;
+      m.visible = n > 0; // an empty instanced mesh still costs a draw call
       m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    };
+    this.homes.forEach((m, i) => flush(m, counts[i]));
+    this.homesFar.forEach((m, i) => flush(m, far[i]));
+    for (const k of STRUCT_KINDS) {
+      flush(this.structs[k], sc[k] ?? 0);
     }
-    if (this.pennants.instanceColor) this.pennants.instanceColor.needsUpdate = true;
+    for (const [m, n] of [[this.sites, nsite], [this.frames, nfr], [this.glow, ng], [this.pools, np], [this.flames, nf], [this.crystals, nc]] as const) flush(m, n);
     if (this.crystals.instanceColor) this.crystals.instanceColor.needsUpdate = true;
     this.glowMat.opacity = Math.min(1, night * 1.2);
     this.poolMat.opacity = night * 0.55;

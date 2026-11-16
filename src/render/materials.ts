@@ -33,6 +33,31 @@ export function extendShader<T extends Material>(m: T, key: string, fn: Material
   return m;
 }
 
+/**
+ * A vertex-coloured material whose instance colour only tints the parts built with
+ * `tint` (Kit.add): a building's paint, cloth and flags take the tribe's colour while
+ * its thatch, timber and stone keep their own, all in one draw call.
+ */
+export function tintable<T extends Material>(m: T): T {
+  return extendShader(m, 'tint', (sh) => {
+    // three's color_vertex chunk, with the instance colour applied only where tint = 1
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float tint;').replace(
+      '#include <color_vertex>',
+      `#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA ) || defined( USE_INSTANCING_COLOR )
+  vColor = vec4( 1.0 );
+#endif
+#ifdef USE_COLOR_ALPHA
+  vColor *= color;
+#elif defined( USE_COLOR )
+  vColor.rgb *= color;
+#endif
+#ifdef USE_INSTANCING_COLOR
+  vColor.rgb *= mix( vec3( 1.0 ), instanceColor.rgb, tint );
+#endif`,
+    );
+  });
+}
+
 /** Shadow-pass material that bends like everything else, so shadows line up. */
 const depthMat = bent(new MeshDepthMaterial());
 
