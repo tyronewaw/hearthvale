@@ -188,6 +188,43 @@ function tepee(): Model {
 }
 
 /**
+ * A great lodge's compound: a palisade of pointed stakes round its yard with a carved,
+ * bannered gate at the front, a fire pit and a drying rack. (A great lodge has the whole 5×5
+ * round it to itself, so the yard never overlaps another building.) Far away: a plain ring.
+ */
+function compound(m: Two, R: number, lod: boolean): void {
+  const k = m.k, gap = 0.32;
+  if (lod) {
+    k.add(new CylinderGeometry(R, R, 0.3, 14, 1, true, gap, Math.PI * 2 - gap * 2), (f) => (f % 2 ? WOOD : TIMBER2), { pos: [0, 0.15, 0] });
+    return;
+  }
+  const n = 34;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < gap) continue;
+    const h = 0.32 + (i % 3) * 0.04, x = Math.sin(a) * R, z = Math.cos(a) * R;
+    k.add(new BoxGeometry(0.07, h, 0.07), i % 2 ? WOOD : TIMBER, { pos: [x, h / 2, z], rot: [0, a, 0] });
+    k.add(new ConeGeometry(0.05, 0.1, 4), TIMBER2, { pos: [x, h + 0.05, z], rot: [0, a + Math.PI / 4, 0] });
+  }
+  k.add(new CylinderGeometry(R - 0.04, R - 0.04, 0.03, 24, 1, true, gap, Math.PI * 2 - gap * 2), TIMBER2, { pos: [0, 0.2, 0] });
+  // the gate: carved posts with painted caps and a bannered lintel
+  const gx = Math.sin(gap) * R, gz = Math.cos(gap) * R;
+  carvedPost(m, -gx, gz, 0.62);
+  carvedPost(m, gx, gz, 0.62);
+  k.add(new BoxGeometry(gx * 2 + 0.12, 0.06, 0.07), TIMBER, { pos: [0, 0.6, gz] });
+  m.t.add(new BoxGeometry(gx * 1.2, 0.16, 0.012), PAINT, { pos: [0, 0.48, gz + 0.04] });
+  // the yard: a fire pit and a drying rack
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    k.add(new BoxGeometry(0.07, 0.05, 0.06), i % 2 ? STONE : STONE2, { pos: [-0.85 + Math.cos(a) * 0.14, 0.025, 1.25 + Math.sin(a) * 0.14], rot: [0, a, 0] });
+  }
+  k.add(new CylinderGeometry(0.1, 0.1, 0.012, 7), ASH, { pos: [-0.85, 0.006, 1.25] });
+  for (const z of [0.95, 1.45]) k.add(new BoxGeometry(0.03, 0.36, 0.03), POLE, { pos: [0.95, 0.18, z] });
+  k.add(new BoxGeometry(0.03, 0.03, 0.56), WOOD, { pos: [0.95, 0.35, 1.2] });
+  for (let i = 0; i < 3; i++) k.add(new BoxGeometry(0.012, 0.14, 0.12), HIDE[i % 3]!, { pos: [0.95, 0.27, 1.02 + i * 0.17] });
+}
+
+/**
  * Homes by level: tepee, hut, round hut, big hut, longhouse, great lodge. With lod, the
  * far-away versions: the same huts without the small parts (props, posts, ropes, door frames).
  */
@@ -240,7 +277,8 @@ export function homeModels(lod = false): Model[] {
     m.t.add(new BoxGeometry(0.13, 0.13, 0.13), PAINT, { pos: [0.6, 0.62, 0.62], scale: [0.95, 0.4, 0.95] });
     banner(m, -0.75, 0.55, 1.25, 0.24);
     banner(m, 0.95, 0.15, 1.25, 0.24);
-    out.push({ ...m.build(), glows: [g, g2, g3], smoke: [0, 1.5, 0], fire: null, r: 1.2, h: 1.55 });
+    compound(m, 1.9, lod);
+    out.push({ ...m.build(), glows: [g, g2, g3], smoke: [0, 1.5, 0], fire: null, r: 1.5, h: 1.55 });
   }
   return out;
 }

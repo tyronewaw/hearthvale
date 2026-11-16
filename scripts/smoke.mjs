@@ -111,8 +111,8 @@ try {
     hv.ff(150 * 3);
     // a farm and a lumber camp go up near the Hearth (still building when we look)
     for (const [k, dx, dy] of [['farm', 5, 0], ['lumber', -5, 2], ['shrine', 0, 6]]) {
-      outer: for (let r = 0; r < 6; r++) for (let a = 0; a < 8; a++) {
-        if (sim.build(k, sx + dx + Math.round(Math.cos(a) * r), sy + dy + Math.round(Math.sin(a) * r))) break outer;
+      outer: for (let r = 0; r < 12; r++) for (let a = 0; a < 16; a++) {
+        if (sim.build(k, sx + dx + Math.round(Math.cos((a / 16) * Math.PI * 2) * r), sy + dy + Math.round(Math.sin((a / 16) * Math.PI * 2) * r))) break outer;
       }
     }
     hv.ff(40);
@@ -138,6 +138,10 @@ try {
     const ok = (d) => { const p = scr(d); return d.v.tribe === 0 && !skip.includes(d.v.id) && p.x > 320 && p.x < 960 && p.y > 140 && p.y < 600; };
     const d = hv.renderer.villagers.drawn.find((x) => (x.v.type === 'settler' || x.v.type === 'worker') && x.v.dizzy <= 0 && ok(x)) ?? hv.renderer.villagers.drawn.find(ok);
     if (!d) return null;
+    // ask them to stand still for a few seconds: slow software frames let a walker move 20+ px
+    // between reading their position and the press
+    const v = d.v;
+    v.tx = v.x; v.ty = v.y; v.think = 5; v.t = 5; v.spot = [v.x, v.y]; v.spotT = 5; v.mv = false;
     const p = scr(d);
     return { x: p.x, y: p.y, id: d.v.id, vx: d.v.x, vz: d.v.y, stat: { ...hv.sim().S.stat } };
   }, skip);
@@ -307,7 +311,10 @@ try {
     await pg.click('#bChoose');
     const pet = await pg.evaluate(() => window.__hv.sim().S.pet?.name);
     if (pet !== 'Pip') errors.push(`pet: choosing failed (${pet})`);
-    await pg.evaluate(() => { const hv = window.__hv, P = hv.sim().S.pet; P.mode = 'stay'; P.post = [P.x, P.y]; P.act = null;
+    // hold the pet still while we aim at it (slow software frames would let it wander off the cursor)
+    await pg.evaluate(() => { const hv = window.__hv, P = hv.sim().S.pet; P.mode = 'stay'; P.post = [P.x, P.y];
+      P.need = { food: 100, energy: 100, fun: 100 };
+      P.act = { id: 'wander', ph: 'do', tx: P.x, ty: P.y, t: 999, go: 0, tile: [Math.floor(P.x), Math.floor(P.y)] };
       const r = hv.rig; r.fx = P.x; r.fz = P.y; r.zoom = 0.12; r.apply(); hv.sim().S.t = 150 * 0.42; });
     await frames(pg, 6);
     // stroke it with the mouse, straight after a "dance"

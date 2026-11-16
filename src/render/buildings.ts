@@ -4,7 +4,8 @@ import {
 } from 'three';
 import { STRUCT_KINDS, type StructKind } from '../sim/defs';
 import { hash2 } from '../sim/rng';
-import { N, tdist, wd, type State } from '../sim/world';
+import { NEW_SIZE, sizeOf } from '../sim/village';
+import { N, tdist, wd, wrap, type State } from '../sim/world';
 import { bent } from './bend';
 import { castsShadow, tintable, worldMat } from './materials';
 import { TRIBE_BLUE, TRIBE_RED, crystalGeo, flameGeo, frameGeo, homeModels, siteGeo, structModels, totemGeo, tuftGeo, type Model } from './models';
@@ -44,11 +45,18 @@ function im(scene: Scene, geo: BufferGeometry, mat: MeshLambertMaterial | MeshBa
   return m;
 }
 
-/** World placement of a tile-centred building at its nearest image to the focus. */
-function place(S: State, x: number, y: number, fx: number, fz: number, yaw: number, sy = 1, out = m4): Matrix4 {
-  const cx = x + 0.5, cz = y + 0.5;
+/** Big (2×2) buildings are drawn this much larger than the one-tile models. */
+const BIG = 1.55;
+const scaleFor = (sz: number) => (sz >= 2 ? BIG : 1);
+
+/**
+ * World placement of a building whose footprint (side sz tiles) starts at tile (x, y), at
+ * its nearest image to the focus: centred on the footprint and scaled to fit it.
+ */
+function place(S: State, x: number, y: number, fx: number, fz: number, yaw: number, sy = 1, out = m4, sz = 1): Matrix4 {
+  const cx = x + sz / 2, cz = y + sz / 2, k = scaleFor(sz);
   q4.setFromAxisAngle(up, yaw);
-  return out.compose(v3.set(fx + wd(fx, cx), surfaceY(S, cx, cz), fz + wd(fz, cz)), q4, s3.set(1, sy, 1));
+  return out.compose(v3.set(fx + wd(fx, cx), surfaceY(S, wrap(cx), wrap(cz)), fz + wd(fz, cz)), q4, s3.set(k, sy * k, k));
 }
 
 /**
@@ -125,7 +133,7 @@ export class Buildings {
       this.ghost.geometry = this.structM[kind].geo;
       this.ghostKind = kind;
     }
-    place(S, tile[0], tile[1], fx, fz, 0, 1, this.ghost.matrix);
+    place(S, tile[0], tile[1], fx, fz, 0, 1, this.ghost.matrix, NEW_SIZE);
     this.ghost.matrixAutoUpdate = false;
     this.ghost.matrixWorldNeedsUpdate = true;
     this.ghostMat.color.set(ok ? '#9bf07a' : '#ff6a50');
@@ -191,23 +199,23 @@ export class Buildings {
 
     let nearHearth: Vector3 | null = null, hd = 1e9;
     for (const s of S.structs) {
-      const model = this.structM[s.k], building = s.prog < 1;
+      const model = this.structM[s.k], building = s.prog < 1, sz = sizeOf(s);
       const yaw = ((hash2(s.id, 3) % 4) * Math.PI) / 2;
       // Sites go up in stages: stakes and a wood pile (from 0), a timber frame (from 20%),
       // then the building itself rising inside the frame (from 55%).
       const up01 = building ? smooth((s.prog - 0.55) / 0.45) : 1;
       if (building) {
-        const at = place(S, s.x, s.y, fx, fz, yaw).clone();
-        l4.compose(v3.setFromMatrixPosition(at), q4.setFromAxisAngle(up, yaw), s3.set(model.r, 1, model.r));
+        const at = place(S, s.x, s.y, fx, fz, yaw, 1, m4, sz).clone(), k = scaleFor(sz);
+        l4.compose(v3.setFromMatrixPosition(at), q4.setFromAxisAngle(up, yaw), s3.set(model.r * k, 1, model.r * k));
         this.sites.setMatrixAt(nsite++, l4);
         if (s.prog >= 0.2) {
           const grow = smooth((s.prog - 0.2) / 0.15);
-          l4.compose(v3.setFromMatrixPosition(at), q4.setFromAxisAngle(up, yaw), s3.set(model.r * 0.9, Math.max(0.05, model.h * grow), model.r * 0.9));
+          l4.compose(v3.setFromMatrixPosition(at), q4.setFromAxisAngle(up, yaw), s3.set(model.r * 0.9 * k, Math.max(0.05, model.h * grow * k), model.r * 0.9 * k));
           this.frames.setMatrixAt(nfr++, l4);
         }
         if (up01 <= 0) continue;
       }
-      const base = place(S, s.x, s.y, fx, fz, yaw, Math.max(0.04, up01)).clone();
+      const base = place(S, s.x, s.y, fx, fz, yaw, Math.max(0.04, up01), m4, sz).clone();
       const i = (sc[s.k] = (sc[s.k] ?? 0) + 1) - 1;
       this.structs[s.k].setMatrixAt(i, base);
       this.structs[s.k].setColorAt(i, s.tribe === 1 ? RED_C : BLUE_C);

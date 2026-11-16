@@ -92,6 +92,8 @@ export interface Struct {
   /** Seconds of fertiliser left (doubles a farm's yield). */
   fert: number;
   tribe: Tribe;
+  /** Side of its square footprint in tiles, from (x, y): 2 since phase 14; absent (1) in older saves. */
+  sz?: number;
 }
 
 export type VillType = 'settler' | 'resident' | 'worker';

@@ -37,6 +37,49 @@ export function structById(S: State, id: number | null): Struct | undefined {
   return id === null ? undefined : S.structs.find((s) => s.id === id);
 }
 /** Our Hearth (the Red tribe has its own, see rivalHearth). */
+/** Buildings placed from phase 14 on are 2×2 tiles; older saves keep their 1×1 buildings. */
+export const NEW_SIZE = 2;
+export const sizeOf = (s: Struct): number => s.sz ?? 1;
+/** A building's centre (tile units). */
+export const centreX = (s: Struct): number => s.x + sizeOf(s) / 2;
+export const centreY = (s: Struct): number => s.y + sizeOf(s) / 2;
+/** The tiles a building of side sz anchored at (x, y) covers. */
+export function footprintAt(x: number, y: number, sz: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) out.push([wrap(x + dx), wrap(y + dy)]);
+  return out;
+}
+export const footprint = (s: Struct): [number, number][] => footprintAt(s.x, s.y, sizeOf(s));
+
+/** The tiles just outside a footprint (its ring of neighbours). */
+function ringAt(x: number, y: number, sz: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let dy = -1; dy <= sz; dy++) for (let dx = -1; dx <= sz; dx++) if (dx < 0 || dy < 0 || dx >= sz || dy >= sz) out.push([wrap(x + dx), wrap(y + dy)]);
+  return out;
+}
+
+/**
+ * Can a building of this kind stand on this footprint? Fishing huts need dry tiles with water
+ * right beside them; everything else needs flat land, all at one height.
+ */
+export function footingOk(S: State, k: StructKind, x: number, y: number, sz: number): boolean {
+  const tiles = footprintAt(x, y, sz);
+  if (k === 'fish') return tiles.every(([tx, ty]) => !isWater(S, tx, ty)) && ringAt(x, y, sz).some(([tx, ty]) => isWater(S, tx, ty));
+  const h0 = S.h[idx(x, y)]!;
+  return tiles.every(([tx, ty]) => tileFlat(S, tx, ty) && S.h[idx(tx, ty)] === h0);
+}
+export const structOk = (S: State, s: Struct): boolean => footingOk(S, s.k, s.x, s.y, sizeOf(s));
+
+/** Where a fisher stands: the shore beside the hut, as an offset from its centre. */
+function waterSide(S: State, s: Struct): [number, number] {
+  for (const [tx, ty] of ringAt(s.x, s.y, sizeOf(s)))
+    if (isWater(S, tx, ty)) {
+      const dx = wd(centreX(s), tx + 0.5), dy = wd(centreY(s), ty + 0.5), d = Math.hypot(dx, dy) || 1;
+      return [dx / d, dy / d];
+    }
+  return [1, 0];
+}
+
 export const hearth = (S: State): Struct | undefined => S.structs.find((s) => s.k === 'hearth' && s.tribe === 0);
 export const rivalHearth = (S: State): Struct | undefined => S.structs.find((s) => s.k === 'hearth' && s.tribe === 1);
 export const blueHomes = (S: State): number => S.homes.reduce((n, b) => n + (b.tribe === 0 ? 1 : 0), 0);
@@ -48,7 +91,7 @@ export const workersAt = (S: State, s: Struct): number => S.vills.reduce((n, v) 
 export function rebuildMap(c: Ctx): void {
   c.bmap.fill(null);
   for (const b of c.S.homes) c.bmap[idx(b.x, b.y)] = b;
-  for (const s of c.S.structs) c.bmap[idx(s.x, s.y)] = s;
+  for (const s of c.S.structs) for (const [x, y] of footprint(s)) c.bmap[idx(x, y)] = s;
 }
 
 /** Crops grow on the flat, free tiles around each finished farm. */
@@ -57,12 +100,11 @@ export function calcCrops(c: Ctx): void {
   c.crops.clear();
   for (const s of S.structs) {
     if (s.k !== 'farm' || s.prog < 1) continue;
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        const t = idx(s.x + dx, s.y + dy);
-        if (tileFlat(S, s.x + dx, s.y + dy) && !c.bmap[t] && !S.tree[t]) c.crops.add(t);
-      }
+    // the fields ring the farm
+    for (const [x, y] of ringAt(s.x, s.y, sizeOf(s))) {
+      const t = idx(x, y);
+      if (tileFlat(S, x, y) && !c.bmap[t] && !S.tree[t]) c.crops.add(t);
+    }
   }
 }
 
@@ -151,7 +193,7 @@ export function destroyHome(c: Ctx, b: Home): void {
 export function destroyStruct(c: Ctx, s: Struct): void {
   const S = c.S;
   S.structs = S.structs.filter((o) => o !== s);
-  c.bmap[idx(s.x, s.y)] = null;
+  for (const [x, y] of footprint(s)) if (c.bmap[idx(x, y)] === s) c.bmap[idx(x, y)] = null;
   for (const v of S.vills)
     if (v.job === s.id) {
       v.job = null;
@@ -189,8 +231,7 @@ export function recheck(c: Ctx): void {
     b.tb = 1 + 0.1 * Math.min(6, countTrees(S, b.x, b.y, 2));
   }
   for (const s of S.structs.slice()) {
-    const ok = s.k === 'fish' ? !isWater(S, s.x, s.y) && !!nearWater(S, s.x, s.y) : tileFlat(S, s.x, s.y);
-    if (!ok) destroyStruct(c, s);
+    if (!structOk(S, s)) destroyStruct(c, s);
   }
   calcCrops(c);
 }
@@ -372,25 +413,26 @@ function stepRes(c: Ctx, w: Vill, dt: number): boolean {
 function workSpot(c: Ctx, w: Vill, j: Struct): [number, number] {
   const S = c.S, R = c.rng;
   if (w.role === 'farmer') {
-    const near = [...c.crops].filter((t) => Math.abs(wd(j.x, t % N)) <= 1 && Math.abs(wd(j.y, (t / N) | 0)) <= 1);
+    const reach = sizeOf(j) / 2 + 1;
+    const near = [...c.crops].filter((t) => Math.abs(wd(centreX(j), (t % N) + 0.5)) <= reach && Math.abs(wd(centreY(j), ((t / N) | 0) + 0.5)) <= reach);
     if (near.length) {
       const t = near[R.int(near.length)]!;
       return [(t % N) + 0.3 + R.next() * 0.4, ((t / N) | 0) + 0.3 + R.next() * 0.4];
     }
   }
   if (w.role === 'fisher') {
-    const d = nearWater(S, j.x, j.y) ?? [1, 0];
-    return [j.x + 0.5 + d[0] * 0.55 + (R.next() - 0.5) * 0.3, j.y + 0.5 + d[1] * 0.55 + (R.next() - 0.5) * 0.3];
+    const d = waterSide(S, j), r = sizeOf(j) / 2 + 0.05;
+    return [centreX(j) + d[0] * r + (R.next() - 0.5) * 0.3, centreY(j) + d[1] * r + (R.next() - 0.5) * 0.3];
   }
   if (w.role === 'forester') {
     if (countTrees(S, j.x, j.y, 4) >= 3) {
-      const t = findTile(c, j.x + 0.5, j.y + 0.5, 4, (x, y) => S.tree[idx(x, y)]! > 0);
+      const t = findTile(c, centreX(j), centreY(j), 4, (x, y) => S.tree[idx(x, y)]! > 0);
       if (t) {
         w.chop = t;
         return [t[0] + 0.5, t[1] + 0.9];
       }
     }
-    const p = findTile(c, j.x + 0.5, j.y + 0.5, 4, (x, y) => {
+    const p = findTile(c, centreX(j), centreY(j), 4, (x, y) => {
       const t = idx(x, y);
       return !isWater(S, x, y) && !S.tree[t] && !S.rock[t] && !c.bmap[t] && !c.crops.has(t) && !tileFlat(S, x, y);
     });
@@ -399,8 +441,8 @@ function workSpot(c: Ctx, w: Vill, j: Struct): [number, number] {
       return [p[0] + 0.5, p[1] + 0.9];
     }
   }
-  const a = R.next() * 6.3;
-  return [j.x + 0.5 + Math.cos(a) * 0.9, j.y + 0.5 + Math.sin(a) * 0.9];
+  const a = R.next() * 6.3, r = 0.4 + sizeOf(j) / 2;
+  return [centreX(j) + Math.cos(a) * r, centreY(j) + Math.sin(a) * r];
 }
 
 /** Workers go to their job (or rest by the Hearth at night) and produce while there. */
@@ -416,8 +458,8 @@ function stepWorker(c: Ctx, w: Vill, dt: number, night: number): void {
   if (night > 0.6 && H) {
     if (w.st !== 'rest') {
       const a = R.next() * 6.3;
-      w.tx = wrap(H.x + 0.5 + Math.cos(a) * 1.4);
-      w.ty = wrap(H.y + 0.5 + Math.sin(a) * 1.4);
+      w.tx = wrap(centreX(H) + Math.cos(a) * (0.9 + sizeOf(H) / 2));
+      w.ty = wrap(centreY(H) + Math.sin(a) * (0.9 + sizeOf(H) / 2));
       w.st = 'rest';
     }
     if (moveTo(c, w, dt, 1, false)) w.mv = false;
@@ -427,7 +469,7 @@ function stepWorker(c: Ctx, w: Vill, dt: number, night: number): void {
   if (w.role === 'builder') {
     let site: Struct | null = null, bd = 1e9;
     for (const s of S.structs)
-      if (s.prog < 1) {
+      if (s.prog < 1 && s.tribe === w.tribe) {
         const d = tdist(s.x, s.y, w.x, w.y);
         if (d < bd) {
           bd = d;
@@ -436,8 +478,8 @@ function stepWorker(c: Ctx, w: Vill, dt: number, night: number): void {
       }
     if (site) {
       w.carry = 1;
-      w.tx = wrap(site.x + 0.5 + ((w.id % 3) - 1) * 0.5);
-      w.ty = wrap(site.y + 1.1);
+      w.tx = wrap(centreX(site) + ((w.id % 3) - 1) * 0.5);
+      w.ty = wrap(centreY(site) + sizeOf(site) / 2 + 0.6);
       if (moveTo(c, w, dt, 1.1, false)) {
         w.mv = false;
         w.st = 'work';
@@ -452,7 +494,7 @@ function stepWorker(c: Ctx, w: Vill, dt: number, night: number): void {
   if (j.prog < 1 && w.role !== 'builder') {
     if (!w.spot) {
       const a = R.next() * 6.3;
-      w.spot = [j.x + 0.5 + Math.cos(a) * 1.2, j.y + 0.5 + Math.sin(a) * 1.2];
+      w.spot = [centreX(j) + Math.cos(a) * (0.7 + sizeOf(j) / 2), centreY(j) + Math.sin(a) * (0.7 + sizeOf(j) / 2)];
     }
     w.tx = wrap(w.spot[0]);
     w.ty = wrap(w.spot[1]);
@@ -499,7 +541,7 @@ function stepWorker(c: Ctx, w: Vill, dt: number, night: number): void {
     w.st = '';
     if (!w.mv && R.next() < dt * 0.3 && H) {
       const a = R.next() * 6.3;
-      w.spot = [H.x + 0.5 + Math.cos(a) * 1.3, H.y + 0.5 + Math.sin(a) * 1.3];
+      w.spot = [centreX(H) + Math.cos(a) * (0.8 + sizeOf(H) / 2), centreY(H) + Math.sin(a) * (0.8 + sizeOf(H) / 2)];
     }
   }
 }
@@ -567,18 +609,29 @@ export function tribePop(S: State, t: Tribe): number {
 
 // ---------------------------------------------------------------- building
 
-export function validSite(c: Ctx, k: StructKind, x: number, y: number): boolean {
+/**
+ * Can a new building go here? Its 2×2 footprint (anchored at x, y) needs good footing, no
+ * trees, rocks or crops, and no other building on or right next to it.
+ */
+export function validSite(c: Ctx, k: StructKind, x: number, y: number, sz = NEW_SIZE): boolean {
   const S = c.S;
   if (UNIQUE.includes(k) && S.structs.some((s) => s.k === k && s.tribe === 0)) return false;
-  if (k === 'fish') return !isWater(S, x, y) && !!nearWater(S, x, y) && spaced(c, x, y) && !S.tree[idx(x, y)] && !S.rock[idx(x, y)];
-  return canSettle(c, x, y);
+  if (!footingOk(S, k, x, y, sz)) return false;
+  for (const [tx, ty] of footprintAt(x, y, sz)) {
+    const t = idx(tx, ty);
+    if (S.tree[t] || S.rock[t] || c.crops.has(t)) return false;
+  }
+  for (let dy = -1; dy <= sz; dy++) for (let dx = -1; dx <= sz; dx++) if (c.bmap[idx(x + dx, y + dy)]) return false;
+  return true;
 }
 
-export function placeStruct(c: Ctx, k: StructKind, x: number, y: number, prog: number, tribe: Tribe = 0): Struct {
-  const S = c.S, s: Struct = { kind: 'struct', id: S.uid++, k, x: wrap(x), y: wrap(y), prog, fert: 0, tribe };
+export function placeStruct(c: Ctx, k: StructKind, x: number, y: number, prog: number, tribe: Tribe = 0, sz = NEW_SIZE): Struct {
+  const S = c.S, s: Struct = { kind: 'struct', id: S.uid++, k, x: wrap(x), y: wrap(y), prog, fert: 0, tribe, sz };
   S.structs.push(s);
-  c.bmap[idx(x, y)] = s;
-  S.tree[idx(x, y)] = 0;
+  for (const [tx, ty] of footprint(s)) {
+    c.bmap[idx(tx, ty)] = s;
+    S.tree[idx(tx, ty)] = 0;
+  }
   return s;
 }
 
@@ -588,7 +641,8 @@ export function nearStruct(S: State, x: number, y: number, r: number, tribe?: Tr
   let best: Struct | null = null, bd = r;
   for (const s of S.structs) {
     if (tribe !== undefined && s.tribe !== tribe) continue;
-    const d = tdist(s.x + 0.5, s.y + 0.5, x, y);
+    // measured from the building's edge, so a drop anywhere on a big building counts
+    const d = tdist(centreX(s), centreY(s), x, y) - (sizeOf(s) - 1) * 0.75;
     if (d < bd) {
       bd = d;
       best = s;
@@ -723,7 +777,7 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
 export function influenceSources(S: State, tribe: Tribe): [number, number, number][] {
   const out: [number, number, number][] = [];
   for (const b of S.homes) if (b.tribe === tribe) out.push([b.x + 0.5, b.y + 0.5, 3 + b.lv]);
-  for (const s of S.structs) if (s.tribe === tribe) out.push([s.x + 0.5, s.y + 0.5, s.k === 'hearth' ? 8 : 5]);
+  for (const s of S.structs) if (s.tribe === tribe) out.push([centreX(s), centreY(s), (s.k === 'hearth' ? 8 : 5) + (sizeOf(s) - 1) * 0.5]);
   return out;
 }
 

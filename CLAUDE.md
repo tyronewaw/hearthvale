@@ -9,7 +9,9 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
   - phase 11: land borders on the ground, Red festivals and shrine
   - phase 12: pets look different at each growth stage
   - phase 13: detailed tribal buildings, tribe colours, construction stages
-  - next, phase 14: bigger buildings (2×2 work buildings, compounds) Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
+  - phase 14: bigger buildings (2×2 work buildings, a compound for the great lodge)
+
+  Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
@@ -120,6 +122,15 @@ legacy/       the 2D prototype (design reference; do not edit)
   - **Tribe colours in one draw call.** Parts added with `tint` (painted wall band, dyed roof band, finial and roof flag, door curtain, banners) carry a per-vertex mask. `tintable()` replaces three's `color_vertex` chunk so the instance colour only applies where the mask is 1: blue for ours, red for theirs, blending with belief.
   - **Construction in stages.** Stakes, rope and a wood pile from 0%. A timber frame from 20%. The building rising inside the frame from 55%.
   - **Homes.** A new home rises from its frame over 1.4 s of *real* time (render dt is capped per frame, so slow frames would stall it). Growing a level throws a puff of dust.
+  - **Bigger buildings (phase 14).** Work buildings placed from now on cover 2×2 tiles. `Struct.sz` is 2; older saves' buildings have no `sz` and stay 1×1 (`sizeOf`), so updating never breaks a village.
+    - `footprint`/`footprintAt` give the tiles, all in `bmap`. `centreX/Y` give the middle.
+    - `footingOk`: every tile flat at one height. A fishing hut needs dry tiles with water in the ring just outside.
+    - `validSite` also wants no trees, rocks or crops on the footprint, and no building in the ring round it.
+    - Recheck uses `structOk`. Farms are ringed by 12 crop tiles.
+    - `nearStruct` measures from the building's edge, so a drop anywhere on it gives the job. Influence radius +0.5.
+    - Workers, builders, fishers and the pet aim at the centre. Builders only build their own tribe's sites (this fixes our builders wandering off to the Red shrine).
+    - The build preview anchors the footprint so its centre is the vertex nearest the pointer (`buildAnchor` in main).
+    - Rendering: a 2×2 building is drawn at its centre, ×1.55. The great lodge gets a compound (palisade of pointed stakes, carved gate with a banner, fire pit and drying rack; a plain ring when far away). A great lodge always has its 5×5 to itself, so the yard never overlaps anything.
   - **LOD.** Homes more than 30 units (horizontally) from the camera use simpler models: no plinth, posts, ropes, props or door frames, but the same tribe colours. Empty instanced meshes are hidden, since they would still cost a draw call.
 - **The hand** picks villagers, trees and rocks in screen space from their drawn positions, not from the ground behind them. Held things hang from its grip point.
   - Pose by context: open when idle, reach when over something grabbable, point for the other tools, grip (lowered, fist) while you pan the world, hold while carrying.
@@ -163,6 +174,7 @@ legacy/       the 2D prototype (design reference; do not edit)
   - before culling: high 458k triangles at every zoom
   - after culling (phase 7): high 137k / 173k / 211k triangles (94–124 calls) at zoom 0.2 / 0.45 / 1; medium 93k–141k triangles (66–96 calls)
   - phase 13 detailed buildings, with home LOD and the tint mask: high 193k / 229k / 247k triangles (118 / 125 / 147 calls); medium 123k–163k triangles (80–109 calls)
+  - phase 14 (2×2 buildings, lodge compound): high 199k / 235k / 248k triangles (118 / 125 / 143 calls); medium 125k–164k triangles (80–107 calls)
 - **WebGPU is deferred.** The bend uses `onBeforeCompile`, which WebGPURenderer doesn't support (it needs TSL).
 - **The Red tribe** (phase 10, the user's design choice: "win them over"). Nobody fights.
   - Every home, struct and villager has `tribe` (0 ours, 1 Red). Red homes also have `bel` (0..100, how won over they are). `fixTribes` gives pre-tribe saves tribe 0.
@@ -187,7 +199,8 @@ legacy/       the 2D prototype (design reference; do not edit)
     - Red homes within 8 tiles of it lose 0.12 belief a second more.
     - Its crystal glows warm red. The pet's Build trick ignores Red sites, and Red buildings finish without a toast.
   - **Mood.** `rivalMood(S, home)` puts one line of advice in a Red home's tooltip: celebrating, pet mischief, no homes nearby, homes too small, no Shrine nearby, loyal core, or warming.
-  - **Balance probe.** 500 people around day 8 and 1000 around day 12–13. The Red tribe caps at 160 by day 3, and a player who just expands wins them over around days 20–27. The probe's scripted player only acts for our tribe.
+  - **Balance probe.** With 2×2 buildings: 500 people around day 9 and 1000 around day 15. The Red tribe caps at 160 by day 3, and a player who just expands wins them over around days 25–30.
+    - The probe's scripted player only acts for our tribe, never digs under its own buildings, and searches outwards from the Hearth for the nearest valid site (40 random tries rarely found a free 2×2 in a crowded village).
 - **Our tribe is blue (user's choice).** Villagers wear tribe-blue clothing, from the prototype's `TRIBE` blues (#3f6fc4, #3566b0, #4a7fd6, #2f5ea8). Jobs show as accents on top of the blue: farmer straw hat, forester green cap, fisher teal hat, builder orange headband and tool, priest white robe trim with a feather headdress. That way the whole tribe reads as one blue people from afar, and jobs are still clear up close. Blue also tints tribe flags and festival bunting. A future rival tribe gets a different colour.
 
 ## Conventions

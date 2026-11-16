@@ -73,7 +73,7 @@ export function migrateV2(json: string): State | null {
   S.homes = o.homes.map((b): Home => ({ kind: 'home', id: S.uid++, x: wrap(b.x + OFF), y: wrap(b.y + OFF), lv: b.lv, pop: b.pop, tb: 1, tribe: 0, bel: 0 }));
   const sid: number[] = [];
   S.structs = o.structs.filter((s) => KINDS.includes(s.k as StructKind)).map((s, i): Struct => {
-    const st: Struct = { kind: 'struct', id: S.uid++, k: s.k as StructKind, x: wrap(s.x + OFF), y: wrap(s.y + OFF), prog: s.prog, fert: s.fert ?? 0, tribe: 0 };
+    const st: Struct = { kind: 'struct', id: S.uid++, k: s.k as StructKind, x: wrap(s.x + OFF), y: wrap(s.y + OFF), prog: s.prog, fert: s.fert ?? 0, tribe: 0, sz: 1 };
     sid[i] = st.id;
     return st;
   });
