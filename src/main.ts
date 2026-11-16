@@ -2,9 +2,10 @@ import '@fontsource/pixelify-sans/400.css';
 import '@fontsource/pixelify-sans/600.css';
 import './ui/styles.css';
 import { Sim, type ToolId } from './sim/sim';
-import { TICK } from './sim/world';
+import { DAY, TICK } from './sim/world';
 import { CameraRig } from './render/camera-rig';
 import { GameRenderer } from './render/renderer';
+import { detectQuality } from './render/quality';
 import { standY } from './render/scale';
 import { Controls } from './input/controls';
 import { Ui } from './ui/hud';
@@ -14,11 +15,14 @@ export interface HvDebug {
   ready: boolean;
   sim(): Sim;
   rig: CameraRig;
+  renderer: GameRenderer;
   setTool(id: ToolId): void;
   use(id: ToolId, vx: number, vz: number): boolean;
   /** Advance the simulation by this many in-game seconds immediately. */
   ff(seconds: number): void;
-  info(): { calls: number; triangles: number; fps: number };
+  info(): { calls: number; triangles: number; fps: number; tier: string };
+  /** Jump the clock to a time of day (0..1) on the current day, for screenshots. */
+  timeOfDay(t: number): void;
 }
 declare global {
   interface Window {
@@ -34,7 +38,7 @@ sim.sandbox = sandbox;
 
 const canvas = document.getElementById('cv') as HTMLCanvasElement;
 const rig = new CameraRig(sim.S.start[0] + 0.5, sim.S.start[1] + 0.5, innerWidth / innerHeight);
-const R = new GameRenderer(canvas, sim.S, rig);
+const R = new GameRenderer(canvas, sim.S, rig, detectQuality());
 
 let tool: ToolId = 'raise';
 let paused = false;
@@ -106,6 +110,7 @@ function frame(now: number): void {
   }
   for (const e of sim.drain()) {
     if (e.k === 'terrain') R.terrainChanged(e.tiles);
+    else if (e.k === 'flora') R.floraChanged();
     else if (e.k === 'toast') ui.toast(e.msg);
   }
 
@@ -117,7 +122,7 @@ function frame(now: number): void {
   if (showStats && (statsT -= rdt) <= 0) {
     statsT = 0.5;
     const r = R.gl.info.render;
-    ui.stats(`${fps.toFixed(0)} fps · ${r.calls} calls · ${(r.triangles / 1000).toFixed(1)}k tris`);
+    ui.stats(`${fps.toFixed(0)} fps · ${r.calls} calls · ${(r.triangles / 1000).toFixed(1)}k tris · ${R.q.tier}`);
   }
   requestAnimationFrame(frame);
 }
@@ -126,12 +131,17 @@ window.__hv = {
   ready: false,
   sim: () => sim,
   rig,
+  renderer: R,
   setTool: pickTool,
   use: (id, vx, vz) => sim.useTool(id, vx, vz),
   ff: (seconds) => {
     for (let i = 0; i < seconds / TICK; i++) sim.tick();
   },
-  info: () => ({ calls: R.gl.info.render.calls, triangles: R.gl.info.render.triangles, fps }),
+  info: () => ({ calls: R.gl.info.render.calls, triangles: R.gl.info.render.triangles, fps, tier: R.q.tier }),
+  timeOfDay: (t) => {
+    const S = sim.S;
+    S.t = Math.floor(S.t / DAY) * DAY + t * DAY;
+  },
 };
 
 requestAnimationFrame((t) => {

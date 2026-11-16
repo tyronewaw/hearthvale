@@ -9,7 +9,7 @@ A cosy 3D god game for the browser. Shape a little wrap-around planet, guide you
 It is being rebuilt in phases, and each phase ends playable.
 
 1. ✅ Curved wrap-around terrain and land editing
-2. Water, sky, day/night, seasons, shadows, trees
+2. ✅ Water, sky, day/night, seasons, shadows, trees
 3. Huts, villagers, growth and economy
 4. The god hand with physics grab and throw
 5. The god pet: needs, habits, teaching, tricks
@@ -26,7 +26,7 @@ It is being rebuilt in phases, and each phase ends playable.
 ## Develop
 ```bash
 npm install
-npm run dev      # http://localhost:5173  (try ?sandbox&stats)
+npm run dev      # http://localhost:5173  (try ?sandbox&stats, ?q=low|medium|high)
 npm run check    # typecheck + unit tests
 npm run smoke    # build + headless browser play-through + screenshots in shots/
 ```

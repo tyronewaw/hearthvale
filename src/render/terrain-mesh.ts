@@ -1,31 +1,38 @@
 import { BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshLambertMaterial, SRGBColorSpace } from 'three';
 import { hash2 } from '../sim/rng';
 import { CHUNK, CHUNKS, idx, wd, type State } from '../sim/world';
-import { bent } from './bend';
+import { worldMat } from './materials';
 import { yOf } from './scale';
 
 type RGB = readonly [number, number, number];
 
+interface Palette {
+  sand: RGB;
+  meadow: RGB; // flat land: where homes and fields can go
+  g1: RGB;
+  g2: RGB;
+  g3: RGB;
+  rock: RGB;
+  snow: RGB;
+  seabed: RGB;
+}
+
 /**
- * Spring palette, after the prototype's `pal()` but spread further apart so height reads
- * clearly in 3D. Seasons arrive in phase 2.
+ * One palette per season (spring, summer, autumn, winter), after the prototype's `pal(s)`
+ * but spread further apart so height reads clearly in 3D.
  */
-const PAL = {
-  sand: [232, 206, 148] as RGB,
-  meadow: [168, 214, 108] as RGB, // flat land: where homes and fields can go
-  g1: [128, 196, 92] as RGB,
-  g2: [96, 166, 78] as RGB,
-  g3: [86, 134, 82] as RGB,
-  rock: [150, 136, 120] as RGB,
-  snow: [247, 249, 255] as RGB,
-  seabed: [96, 150, 150] as RGB,
-};
+const PALS: readonly Palette[] = [
+  { sand: [232, 206, 148], meadow: [168, 214, 108], g1: [128, 196, 92], g2: [96, 166, 78], g3: [86, 134, 82], rock: [150, 136, 120], snow: [247, 249, 255], seabed: [96, 150, 150] },
+  { sand: [236, 208, 146], meadow: [176, 206, 96], g1: [116, 182, 74], g2: [88, 152, 66], g3: [80, 124, 72], rock: [150, 136, 120], snow: [247, 249, 255], seabed: [96, 150, 150] },
+  { sand: [228, 200, 146], meadow: [208, 190, 104], g1: [194, 172, 94], g2: [170, 146, 80], g3: [150, 114, 76], rock: [146, 130, 116], snow: [247, 249, 255], seabed: [96, 146, 146] },
+  { sand: [222, 214, 198], meadow: [240, 244, 250], g1: [232, 238, 246], g2: [220, 228, 240], g3: [206, 214, 230], rock: [190, 196, 212], snow: [250, 252, 255], seabed: [92, 140, 150] },
+];
 
 const TRIS_PER_CHUNK = CHUNK * CHUNK * 2;
 const VERTS_PER_CHUNK = TRIS_PER_CHUNK * 3;
 const tmp = new Color();
 
-function triColour(ha: number, hb: number, hc: number): RGB {
+function triColour(PAL: Palette, ha: number, hb: number, hc: number): RGB {
   if (!(ha | hb | hc)) return PAL.seabed;
   if (!ha || !hb || !hc) return PAL.sand;
   const av = (ha + hb + hc) / 3;
@@ -40,8 +47,9 @@ function triColour(ha: number, hb: number, hc: number): RGB {
  */
 export class TerrainMesh {
   readonly group = new Group();
-  readonly material = bent(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  readonly material = worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   private chunks: Mesh[] = [];
+  private pal: Palette = PALS[0]!;
 
   constructor(private S: State) {
     this.group.name = 'terrain';
@@ -52,6 +60,8 @@ export class TerrainMesh {
       g.setAttribute('color', new BufferAttribute(new Float32Array(VERTS_PER_CHUNK * 3), 3));
       const m = new Mesh(g, this.material);
       m.matrixAutoUpdate = false;
+      // Receive only: casting would redraw all 64 chunks in every shadow pass, and the
+      // faceted shading already shows the relief.
       m.receiveShadow = true;
       // The bend moves far geometry down into view, so unbent bounds would cull it wrongly.
       m.frustumCulled = false;
@@ -64,6 +74,18 @@ export class TerrainMesh {
 
   setState(S: State): void {
     this.S = S;
+    this.rebuildAll();
+  }
+
+  /** Recolour for a season (0 spring … 3 winter). */
+  setSeason(se: number): void {
+    const p = PALS[se] ?? PALS[0]!;
+    if (p === this.pal) return;
+    this.pal = p;
+    this.rebuildAll();
+  }
+
+  rebuildAll(): void {
     for (let c = 0; c < this.chunks.length; c++) this.rebuild(c);
   }
 
@@ -92,7 +114,7 @@ export class TerrainMesh {
       let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
       const l = Math.hypot(nx, ny, nz) || 1;
       nx /= l; ny /= l; nz /= l;
-      const rgb = triColour(h[order[0]]!, h[order[1]]!, h[order[2]]!);
+      const rgb = triColour(this.pal, h[order[0]]!, h[order[1]]!, h[order[2]]!);
       // A little per-face variation keeps the low-poly look hand-made, not noisy.
       const q = hash2(cx + x + salt * 7919, cz + z) % 17;
       const m = q === 0 ? 0.95 : q === 1 ? 1.04 : 1;
