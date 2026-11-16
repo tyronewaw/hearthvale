@@ -1,4 +1,5 @@
 import type { RoleId, StructKind } from './defs';
+import type { Pet } from './pet';
 
 /**
  * World constants and torus helpers.
@@ -173,6 +174,10 @@ export interface State {
   cheers: { x: number; y: number; t: number }[];
   stat: Stats;
   hinted: Record<string, 1>;
+  /** The god pet (null until chosen). */
+  pet: Pet | null;
+  /** Pet droppings that fertilise the ground when they fade. */
+  poos: { x: number; y: number; t: number }[];
 }
 
 export const season = (t: number): number => Math.floor(t / DAY / 3) % 4;

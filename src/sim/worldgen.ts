@@ -51,6 +51,8 @@ export function emptyState(seed: number): State {
     cheers: [],
     stat: { strokes: 0, drops: 0, throws: 0, woodIn: 0, taught: 0 },
     hinted: {},
+    pet: null,
+    poos: [],
   };
 }
 

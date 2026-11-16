@@ -38,7 +38,7 @@ try {
   // ---------- desktop ----------
   const desk = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
   watch(desk, 'desktop');
-  await desk.goto(`${BASE}/?seed=42&nohelp&sandbox`);
+  await desk.goto(`${BASE}/?seed=42&nohelp&sandbox&nopet`);
   await desk.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
   await desk.waitForTimeout(600); // let the loading veil fade
   await desk.screenshot({ path: 'shots/desktop-start.png' });
@@ -184,11 +184,17 @@ try {
   }
   // … and a deterministic throw through the same physics path, which must fly and land.
   await frames(desk, 10);
-  target = await grabVillager();
-  if (!target) errors.push('hand: could not grab a villager to throw');
+  await desk.mouse.move(640, 400);
+  await frames(desk, 3);
+  target = await desk.evaluate(() => {
+    const hv = window.__hv, S = hv.sim().S, v = S.vills.find((o) => o.type === 'settler' || o.type === 'worker') ?? S.vills[0];
+    if (!v || !hv.sim().grab(v.id)) return null;
+    return { id: v.id, vx: v.x, vz: v.y, stat: { ...S.stat } };
+  });
+  if (!target) errors.push('hand: could not pick up a villager to throw');
   else {
+    await frames(desk, 3);
     await desk.evaluate(() => window.__hv.throwHeld(-10, -6));
-    await desk.mouse.up();
     await frames(desk, 3);
     await desk.screenshot({ path: 'shots/hand-throw-flight.png' });
     if (!(await waitLanded('throws', target.stat.throws))) errors.push('hand: thrown villager never landed as a throw');
@@ -213,7 +219,7 @@ try {
   const phoneCtx = await browser.newContext({ ...devices['iPhone 13'] });
   const phone = await phoneCtx.newPage();
   watch(phone, 'phone');
-  await phone.goto(`${BASE}/?seed=42&nohelp`);
+  await phone.goto(`${BASE}/?seed=42&nohelp&nopet`);
   await phone.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
   await phone.waitForTimeout(600);
   await phone.screenshot({ path: 'shots/phone.png' });
@@ -223,11 +229,65 @@ try {
   await phone.screenshot({ path: 'shots/phone-help.png' });
   await phoneCtx.close();
 
+  // ---------- the god pet ----------
+  {
+    const pg = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    watch(pg, 'pet');
+    await pg.goto(`${BASE}/?seed=42&nohelp&sandbox`);
+    await pg.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
+    // choose a pet through the real UI
+    await pg.waitForSelector('#choose.show', { timeout: 5000 });
+    await pg.click('.pc[data-k="monkey"]');
+    await pg.fill('#petNameIn', 'Pip');
+    await pg.screenshot({ path: 'shots/pet-choose.png' });
+    await pg.click('#bChoose');
+    const pet = await pg.evaluate(() => window.__hv.sim().S.pet?.name);
+    if (pet !== 'Pip') errors.push(`pet: choosing failed (${pet})`);
+    await pg.evaluate(() => { const hv = window.__hv, P = hv.sim().S.pet; P.mode = 'stay'; P.post = [P.x, P.y]; P.act = null;
+      const r = hv.rig; r.fx = P.x; r.fz = P.y; r.zoom = 0.12; r.apply(); hv.sim().S.t = 150 * 0.42; });
+    await frames(pg, 6);
+    // stroke it with the mouse, straight after a "dance"
+    const where = () => pg.evaluate(() => { const hv = window.__hv, c = hv.renderer.pet.centre;
+      const v = { x: c.x, y: c.y, z: c.z, project: null }; const p = hv.rig.camera.position.clone().set(c.x, c.y, c.z).project(hv.rig.camera);
+      void v; return { x: ((p.x + 1) / 2) * innerWidth, y: ((1 - p.y) / 2) * innerHeight }; });
+    let at = await where();
+    await pg.evaluate(() => { const S = window.__hv.sim().S; S.pet.last = { id: 'dance', t: S.t }; });
+    const w0 = await pg.evaluate(() => window.__hv.sim().S.pet.w.dance);
+    await pg.mouse.move(at.x, at.y);
+    await frames(pg, 3);
+    await pg.mouse.down();
+    await pg.mouse.up();
+    await frames(pg, 4);
+    await pg.screenshot({ path: 'shots/pet-stroke.png' });
+    const after = await pg.evaluate(() => ({ w: window.__hv.sim().S.pet.w.dance, strokes: window.__hv.sim().S.stat.strokes }));
+    if (!(after.w > w0 && after.strokes === 1)) errors.push(`pet: stroke did not teach (${w0} -> ${after.w}, strokes ${after.strokes})`);
+    // scold it with a right-click
+    at = await where();
+    const love0 = await pg.evaluate(() => window.__hv.sim().S.pet.love);
+    await pg.mouse.click(at.x, at.y, { button: 'right' });
+    await frames(pg, 3);
+    await pg.screenshot({ path: 'shots/pet-scold.png' });
+    if (!(await pg.evaluate((l) => window.__hv.sim().S.pet.love < l, love0))) errors.push('pet: scold did nothing');
+    // each species at a different size
+    for (const [kind, xp] of [['sheep', 0], ['monkey', 60], ['chicken', 200]]) {
+      await pg.evaluate(([kind, xp]) => { const hv = window.__hv, sim = hv.sim(), S = sim.S, [sx, sy] = S.start, old = { x: sx + 2.6, y: sy + 2.4 };
+        sim.choosePet(kind, kind, old.x, old.y); S.pet.face = Math.PI / 2 - 0.7; S.pet.xp = xp; S.pet.stage = xp >= 160 ? 2 : xp >= 40 ? 1 : 0; S.pet.mode = 'stay'; S.pet.post = [old.x, old.y];
+        if (kind === 'monkey') { S.pet.w = { help: 4, plant: 4, dance: 4, play: 1, mischief: 0.2 }; }
+        if (kind === 'chicken') { S.pet.w = { help: 0.3, plant: 0.3, dance: 0.3, play: 1, mischief: 4 }; }
+        S.pet.act = { id: 'wander', ph: 'do', tx: old.x, ty: old.y, t: 99, go: 0, tile: [Math.floor(old.x), Math.floor(old.y)] };
+        const r = hv.rig; r.fx = old.x; r.fz = old.y; r.zoom = 0.1; r.apply(); }, [kind, xp]);
+      await pg.mouse.move(80, 700);
+      await frames(pg, 8);
+      await pg.screenshot({ path: `shots/pet-${kind}.png` });
+    }
+    await pg.close();
+  }
+
   // ---------- other quality tiers (single shadow map paths) ----------
   for (const tier of ['high', 'medium', 'low']) {
     const pg = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
     watch(pg, `q=${tier}`);
-    await pg.goto(`${BASE}/?seed=42&nohelp&q=${tier}`);
+    await pg.goto(`${BASE}/?seed=42&nohelp&nopet&q=${tier}`);
     await pg.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
     await pg.waitForTimeout(600);
     await shot(pg, `quality-${tier}`, () => { window.__hv.sim().S.t = 0.42 * 150; });

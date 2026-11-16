@@ -19,6 +19,9 @@ import { throwVelocity, trimTrail, type TrailPoint } from './physics/throw';
 import type { HandPose } from './render/hand';
 import type { GroundHit } from './input/picking';
 import { Ui } from './ui/hud';
+import { PetCard } from './ui/petcard';
+import { HNAME, PET_STAGE_SCALE, petStage } from './sim/pet';
+import type { Held } from './sim/world';
 
 /** Debug and test hook used by scripts/smoke.mjs. */
 export interface HvDebug {
@@ -88,6 +91,14 @@ let physics: Physics | null = null;
 const trail: TrailPoint[] = [];
 let trailPrev: { x: number; z: number } | null = null, trailU = { x: 0, z: 0 };
 let overGrab = false;
+/** Stroke / slap animation on the hand. */
+let handAnim = { k: '' as '' | 'stroke' | 'slap', t: 0 };
+/** Send mode: the next click on the land sends the pet there. */
+let sendMode = false;
+/** Villagers the monkey flung (their landing doesn't count as the player's throw). */
+const petFlung = new WeakSet<Held>();
+/** Last hand grip position, for nudging the pet with a sweep of the open hand. */
+let lastGrip: Vector3 | null = null;
 /** The last release, for debugging throw feel (window.__hv.lastThrow()). */
 let lastThrow: unknown = null, carryFrames = 0, noTarget = 0;
 
@@ -105,16 +116,44 @@ const ui = new Ui({
   },
   togglePause,
   cycleSpeed: () => (speed = speed === 1 ? 2 : speed === 2 ? 4 : 1),
+  helpClosed: () => {
+    if (!sim.S.pet) petCard.openChoose();
+  },
   newWorld: () => {
     sim = Sim.newWorld(newSeed());
     sim.sandbox = sandbox;
     R.setState(sim.S);
     physics?.setState(sim.S);
+    setTimeout(() => petCard.openChoose(), 300);
     rig.fx = sim.S.start[0] + 0.5;
     rig.fz = sim.S.start[1] + 0.5;
     rig.apply();
     redrawBar();
     save();
+  },
+});
+
+const petCard = new PetCard({
+  choose: (kind, name) => {
+    sim.choosePet(kind, name);
+    pickTool('hand');
+    save();
+  },
+  leash: (m) => sim.setLeash(m),
+  send: () => {
+    sendMode = !sendMode;
+    petCard.setSending(sendMode);
+    if (sendMode && sim.S.pet) ui.toast(`Click the land where ${sim.S.pet.name} should go`);
+  },
+  feed: () => {
+    sim.feed();
+  },
+  find: () => {
+    const P = sim.S.pet;
+    if (!P) return;
+    rig.fx = P.x;
+    rig.fz = P.y;
+    rig.apply();
   },
 });
 
@@ -161,9 +200,46 @@ const controls = new Controls(canvas, rig, {
     return false;
   },
   drop: () => release(),
+  overPet: (cx, cy) => overPet(cx, cy),
+  petTouch: (good) => {
+    if (!sim.S.pet) return;
+    if (good) sim.stroke();
+    else sim.scold();
+    handAnim = { k: good ? 'stroke' : 'slap', t: good ? 0.8 : 0.4 };
+  },
+  click: (hit) => {
+    if (!sendMode || !sim.S.pet) return false;
+    sim.sendPet(wrap(hit.x), wrap(hit.z));
+    sendMode = false;
+    petCard.setSending(false);
+    return true;
+  },
   togglePause,
   toggleHelp: () => ui.toggleHelp(),
 });
+
+const pp = new Vector3(), pr = new Vector3();
+/** Is the pet drawn under this screen point? */
+function overPet(cx: number, cy: number): boolean {
+  const c = R.pet.centre;
+  if (!c.visible || !sim.S.pet) return false;
+  const p = ndc(cx, cy);
+  pp.set(c.x, c.y, c.z).project(rig.camera);
+  pr.set(c.x, c.y, c.z).addScaledVector(new Vector3().setFromMatrixColumn(rig.camera.matrixWorld, 0), c.r).project(rig.camera);
+  const rad = Math.hypot(((pr.x - pp.x) * p.w) / 2, ((pr.y - pp.y) * p.h) / 2) + 8;
+  return pp.z < 1 && Math.hypot(((pp.x - p.x) * p.w) / 2, ((pp.y - p.y) * p.h) / 2) < rad;
+}
+
+/** Launch something the sim wants flown (the monkey's mischief). */
+function launchFromSim(obj: Held, x: number, z: number, vx: number, vz: number): void {
+  petFlung.add(obj);
+  const y = standY(sim.S, x, z) + 0.6;
+  if (physics) physics.launch(obj, x, y, z, vx, 4, vz, true, 1);
+  else {
+    const l = ballisticLanding(sim.S, x, y, z, vx, 4, vz, true);
+    sim.landed(obj, l.x, l.z, true, true);
+  }
+}
 
 /** Let go of what the hand holds: a throw if the hand was moving fast, a drop otherwise. */
 function release(): void {
@@ -189,13 +265,21 @@ function handState(): { target: Vector3 | null; pose: HandPose } {
   const hit = controls.hover;
   if (!hit || !controls.pointer) return { target: null, pose: 'open' };
   let h = 1.45, pose: HandPose = 'open';
+  const P = sim.S.pet;
+  if (handAnim.t > 0 && P) {
+    // stroke along the pet's back, or a quick swat
+    const c = R.pet.centre, sc = PET_STAGE_SCALE[petStage(P)]!;
+    const k = handAnim.k === 'slap' ? Math.max(0, handAnim.t / 0.4) : 0;
+    // the pet's centre is stored with the bend applied; undo it, since the hand is bent in its shader
+    return { target: new Vector3(c.x, c.y + bendDrop(c.x, c.z) + 0.45 * sc + k * 0.5, c.z), pose: handAnim.k === 'slap' ? 'slap' : 'stroke' };
+  }
   if (controls.carrying) {
     h = 1.3;
     pose = 'hold';
   } else if (controls.dragging) {
     h = 0.35;
     pose = 'grip';
-  } else if (tool !== 'hand') {
+  } else if (tool !== 'hand' || sendMode) {
     h = 1.0;
     pose = 'point';
   } else if (overGrab) {
@@ -226,12 +310,18 @@ addEventListener('resize', resize);
 resize();
 pickTool(tool);
 if (!params.has('nohelp') && !booted.loaded) ui.toggleHelp(true);
+else if (!sim.S.pet && !params.has('nopet')) setTimeout(() => petCard.openChoose(), 200);
 
 /** Tooltip for whatever is under the pointer (the prototype's hover()). */
 function tooltip(): string | null {
   const ptr = controls.pointer, hit = controls.hover, S = sim.S;
   overGrab = false;
   if (!ptr || controls.dragging || controls.carrying) return null;
+  if (sendMode) return `<b>Send ${S.pet?.name ?? ''}</b><br>Click the land where it should go and stay`;
+  if (S.pet && overPet(ptr.x, ptr.y)) {
+    overGrab = true;
+    return `<b>${S.pet.name}</b> · ${HNAME[S.pet.act ? S.pet.act.id : 'wander']}<br>Click to stroke, right-click to scold`;
+  }
   if (tool === 'hand') {
     const p = ndc(ptr.x, ptr.y), v = R.villagers.pick(rig.camera, p.x, p.y, p.w, p.h, 16);
     overGrab = !!v || !!pickFlora(ptr.x, ptr.y, hit);
@@ -281,7 +371,11 @@ function frame(now: number): void {
   }
   // Physics: things in the air fly, then come to rest and are handed back to the sim.
   if (physics && !paused) {
-    for (const l of physics.step(rdt * speed, rig.fx, rig.fz)) sim.landed(l.obj, l.x, l.z, l.thrown);
+    const P = sim.S.pet;
+    physics.setPet(P && R.pet.centre.visible
+      ? { x: P.x, y: standY(sim.S, P.x, P.y) + R.pet.centre.r * 0.8, z: P.y, r: R.pet.centre.r * 0.8 }
+      : null);
+    for (const l of physics.step(rdt * speed, rig.fx, rig.fz)) sim.landed(l.obj, l.x, l.z, l.thrown, petFlung.has(l.obj));
     for (const sp of physics.splashes) {
       R.splash(sp.x, sp.z);
       sim.emit({ k: 'sfx', id: 'splash' });
@@ -290,12 +384,23 @@ function frame(now: number): void {
   }
   for (const e of sim.drain()) {
     if (e.k === 'terrain') physics?.terrainChanged(e.tiles);
+    else if (e.k === 'launch') launchFromSim(e.obj, e.x, e.z, e.vx, e.vz);
     R.onEvent(e);
     if (e.k === 'toast') ui.toast(e.msg);
     else if (e.k === 'ui') redrawBar();
   }
 
   controls.frame(rdt, now);
+  if (handAnim.t > 0) handAnim.t -= rdt;
+  // The pet's Follow leash follows the hand's spot on the ground.
+  sim.handGround = controls.hover ? [wrap(controls.hover.x), wrap(controls.hover.z)] : null;
+  // Sweeping the open hand through the pet nudges it along (it can't be picked up).
+  const P = sim.S.pet, g = R.hand.grip;
+  if (P && lastGrip && !controls.carrying && !controls.dragging && R.pet.centre.visible) {
+    const c = R.pet.centre, d = Math.hypot(g.x - c.x, g.z - c.z), vx = (g.x - lastGrip.x) / Math.max(rdt, 1e-3), vz = (g.z - lastGrip.z) / Math.max(rdt, 1e-3);
+    if (d < c.r * 1.3 && g.y - c.y < 1.2 * c.r + 0.6 && Math.hypot(vx, vz) > 3) sim.nudgePet(vx * rdt * 0.6, vz * rdt * 0.6);
+  }
+  lastGrip = g.clone();
   rig.update(rdt, standY(sim.S, rig.fx, rig.fz));
   const hs = handState();
   canvas.className = hs.target ? 'nocursor' : tool === 'hand' ? 'grab' : 'aim';
@@ -322,6 +427,7 @@ function frame(now: number): void {
     handTarget: hs.target, handPose: hs.pose, flyers: physics?.poses() ?? [],
   });
   ui.hud(sim.S, rdt);
+  petCard.update(sim.S, rdt);
   if ((tipT -= rdt) <= 0) {
     tipT = 0.12;
     const ptr = controls.pointer;

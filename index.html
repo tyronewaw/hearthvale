@@ -31,6 +31,20 @@
   <button class="btn" id="bHelp">Help</button>
   <button class="btn" id="bNew">New world</button>
  </div>
+ <div id="petp" class="panel">
+  <div class="ph" id="petHead"><img id="petImg" alt=""><div><h3 id="petName"></h3><div class="mood" id="petMood"></div><div class="mood" id="petAlign"></div></div></div>
+  <div class="body">
+   <div class="row sm"><span id="petStage">Baby</span><span id="petXp"></span></div><div class="meter"><i id="pnX"></i></div>
+   <div class="row sm"><span>Fullness</span></div><div class="meter"><i id="pnF"></i></div>
+   <div class="row sm"><span>Energy</span></div><div class="meter"><i id="pnE"></i></div>
+   <div class="row sm"><span>Fun</span></div><div class="meter"><i id="pnU"></i></div>
+   <div class="row sm"><span>Love for you</span></div><div class="meter"><i id="pnL"></i></div>
+   <div class="seg" role="group" aria-label="Leash"><button class="btn" id="lFree">Free</button><button class="btn" id="lFollow">Follow</button><button class="btn" id="lStay">Stay</button><button class="btn" id="bSend">Send</button></div>
+   <div id="habits"></div>
+   <div class="mood" id="petTricks" style="margin-top:4px"></div>
+   <div class="pbtns"><button class="btn" id="bFeed">Feed</button><button class="btn" id="bFind">Find</button></div>
+  </div>
+ </div>
 </div>
 <div id="sub" class="panel"></div>
 <div id="desc" class="panel"></div>
@@ -47,10 +61,18 @@
   <li><b>The Hand</b> (<kbd>1</kbd>): grab villagers, trees and rocks and drop them somewhere new. Drop a villager on a building to give them that job; drop trees on the Hearth for wood. Drag empty land to look around.</li>
   <li><b>Build</b> (<kbd>4</kbd>): farms, lumber camps, fishing huts and shrines cost wood. Builders from the Hearth put them up faster.</li>
   <li><b>Totem</b> (<kbd>5</kbd>): wanderers head there to look for land.</li>
+  <li><b>Your pet</b> has its own needs and habits. Click it with the Hand to stroke it, right-click to scold. Stroke it straight after it does something you like and it will do that more; scold it after mischief and it will do it less. Drop trees on it as snacks. Use the leash: Free, Follow your hand, Stay, or Send it somewhere.</li>
   <li>The world is a planet: travel far enough and you come back round. Scroll to zoom, <kbd>Q</kbd> <kbd>E</kbd> or right-drag to turn, <kbd>WASD</kbd> to pan, <kbd>Space</kbd> to pause. Your world saves itself in this browser.</li>
  </ul>
  <p><a href="./legacy/">Play the original 2D prototype</a></p>
  <div class="acts"><button class="btn go" id="bStart">Begin</button></div>
+</div></div>
+
+<div id="choose" class="modal"><div class="card panel wide">
+ <h2>Choose your god pet</h2>
+ <p>A companion to watch over your world. It grows its own habits from how you treat it: stroke it straight after something you like, scold it after mischief.</p>
+ <div class="choose" id="petCards"></div>
+ <div class="acts"><label class="nm">Name <input id="petNameIn" maxlength="14" value="Wooly"></label><button class="btn go" id="bChoose">Choose</button></div>
 </div></div>
 
 <div id="conf" class="modal"><div class="card panel">
