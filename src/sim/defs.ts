@@ -50,5 +50,10 @@ export const TOOLS: readonly ToolDef[] = [
   { id: 'lower', name: 'Lower', cost: 1, need: 0, r: 0, desc: 'Sink the earth a step. Lower it to the sea to make a lake.' },
   { id: 'build', name: 'Build', cost: 0, need: 0, r: 0, desc: '' },
   { id: 'totem', name: 'Totem', cost: 0, need: 0, r: 0, desc: 'Wanderers head here to look for land. Click the totem again to lift it.' },
+  { id: 'bloom', name: 'Bloom', cost: 15, need: 25, r: 3, desc: 'Trees on the slopes and flowers all around. Trees help nearby homes grow.' },
+  { id: 'flat', name: 'Level', cost: 20, need: 60, r: 2, desc: 'Smooth a 4×4 patch to the height you click. Perfect for fields.' },
+  { id: 'rain', name: 'Rain', cost: 30, need: 110, r: 5, desc: 'A soft rain cloud. Homes and farms beneath it grow 2.5× faster for a while.' },
+  { id: 'isle', name: 'Rise', cost: 40, need: 180, r: 2.2, desc: 'Lift a broad round patch, even straight out of the sea.' },
+  { id: 'fest', name: 'Festival', cost: 80, need: 280, r: 0, desc: 'Bunting and lanterns everywhere. Every home grows twice as fast for 40 seconds.' },
 ];
 export const TOOL: Partial<Record<ToolId, ToolDef>> = Object.fromEntries(TOOLS.map((t) => [t.id, t]));

@@ -22,12 +22,14 @@
   <div class="row opt"><span>Wanderers</span><b id="hw">0</b></div>
   <div class="row"><span id="hd">Day 1</span><b id="hs">Spring</b></div>
  </div>
+ <div id="quest" class="panel"><small id="qn">Quest 1</small><b id="qt"></b><p id="qx"></p></div>
 </div>
 <div id="right">
  <div id="top">
   <button class="btn" id="bMenu" aria-expanded="false">Menu</button>
   <button class="btn" id="bPause">Pause</button>
   <button class="btn" id="bSpeed">1×</button>
+  <button class="btn" id="bSound">Sound on</button>
   <button class="btn" id="bHelp">Help</button>
   <button class="btn" id="bNew">New world</button>
  </div>
@@ -62,6 +64,7 @@
   <li><b>Build</b> (<kbd>4</kbd>): farms, lumber camps, fishing huts and shrines cost wood. Builders from the Hearth put them up faster.</li>
   <li><b>Totem</b> (<kbd>5</kbd>): wanderers head there to look for land.</li>
   <li><b>Your pet</b> has its own needs and habits. Click it with the Hand to stroke it, right-click to scold. Stroke it straight after it does something you like and it will do that more; scold it after mischief and it will do it less. Drop trees on it as snacks. Use the leash: Free, Follow your hand, Stay, or Send it somewhere.</li>
+  <li><b>Blessings</b> (<kbd>6</kbd>–<kbd>0</kbd>) unlock as your tribe grows: Bloom, Level, Rain, Rise and Festival. They cost faith, which your people (and priests) give you. Your pet learns tricks by watching you cast them.</li>
   <li>The world is a planet: travel far enough and you come back round. Scroll to zoom, <kbd>Q</kbd> <kbd>E</kbd> or right-drag to turn, <kbd>WASD</kbd> to pan, <kbd>Space</kbd> to pause. Your world saves itself in this browser.</li>
  </ul>
  <p><a href="./legacy/">Play the original 2D prototype</a></p>
@@ -73,6 +76,12 @@
  <p>A companion to watch over your world. It grows its own habits from how you treat it: stroke it straight after something you like, scold it after mischief.</p>
  <div class="choose" id="petCards"></div>
  <div class="acts"><label class="nm">Name <input id="petNameIn" maxlength="14" value="Wooly"></label><button class="btn go" id="bChoose">Choose</button></div>
+</div></div>
+
+<div id="win" class="modal"><div class="card panel">
+ <h2>The valley sings</h2>
+ <p id="winTxt">Your people fill the little world with song.</p>
+ <div class="acts"><button class="btn go" id="bKeep">Keep playing</button></div>
 </div></div>
 
 <div id="conf" class="modal"><div class="card panel">
