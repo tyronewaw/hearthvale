@@ -10,7 +10,7 @@ import type { Rng } from './rng';
 import { isWater, tileFlat } from './terrain';
 import {
   D8, N, idx, season, tdist, wd, wrap,
-  type Home, type State, type Struct, type Vill, type VillType,
+  type Home, type State, type Struct, type Tribe, type Vill, type VillType,
 } from './world';
 
 /** What village code needs from the Sim (kept as an interface to avoid an import cycle). */
@@ -36,7 +36,10 @@ export function homeById(S: State, id: number | null): Home | undefined {
 export function structById(S: State, id: number | null): Struct | undefined {
   return id === null ? undefined : S.structs.find((s) => s.id === id);
 }
-export const hearth = (S: State): Struct | undefined => S.structs.find((s) => s.k === 'hearth');
+/** Our Hearth (the Red tribe has its own, see rivalHearth). */
+export const hearth = (S: State): Struct | undefined => S.structs.find((s) => s.k === 'hearth' && s.tribe === 0);
+export const rivalHearth = (S: State): Struct | undefined => S.structs.find((s) => s.k === 'hearth' && s.tribe === 1);
+export const blueHomes = (S: State): number => S.homes.reduce((n, b) => n + (b.tribe === 0 ? 1 : 0), 0);
 /** The pet pen, once it is built. */
 export const builtPen = (S: State): Struct | undefined => S.structs.find((s) => s.k === 'pen' && s.prog >= 1);
 export const roleCount = (S: State, r: string): number => S.vills.reduce((n, v) => n + (v.role === r ? 1 : 0), 0);
@@ -115,23 +118,25 @@ export function mkV(c: Ctx, type: VillType, x: number, y: number, o: Partial<Vil
   y = wrap(y);
   return {
     id: S.uid++, type, role: 'settler', job: null, home: null, x, y, px: x, py: y, tx: x, ty: y,
-    think: R.next() * 0.5, blocked: 0, c: R.int(4), sk: R.int(4), face: R.next() * 6.28, st: '', t: 0, dizzy: 0,
+    think: R.next() * 0.5, blocked: 0, tribe: 0, c: R.int(4), sk: R.int(4), face: R.next() * 6.28, st: '', t: 0, dizzy: 0,
     wave: 0, mv: false, spot: null, spotT: 0, carry: 0, goal: null, chop: null, plant: null, ...o,
   };
 }
 
-function settlersOut(c: Ctx, x: number, y: number, n: number): void {
-  for (let k = 0; k < n; k++) c.S.vills.push(mkV(c, 'settler', x + 0.5 + (c.rng.next() - 0.5) * 0.6, y + 0.5 + (c.rng.next() - 0.5) * 0.6));
+function settlersOut(c: Ctx, x: number, y: number, n: number, tribe: Tribe = 0): void {
+  for (let k = 0; k < n; k++) c.S.vills.push(mkV(c, 'settler', x + 0.5 + (c.rng.next() - 0.5) * 0.6, y + 0.5 + (c.rng.next() - 0.5) * 0.6, { tribe }));
 }
 
-export function newHome(c: Ctx, x: number, y: number, pop: number): Home {
+export function newHome(c: Ctx, x: number, y: number, pop: number, tribe: Tribe = 0): Home {
   const S = c.S, lv = levelFor(fields(c, x, y));
-  const b: Home = { kind: 'home', id: S.uid++, x: wrap(x), y: wrap(y), lv, pop: Math.min(pop, BMAX[lv]!), tb: 1 };
+  const b: Home = { kind: 'home', id: S.uid++, x: wrap(x), y: wrap(y), lv, pop: Math.min(pop, BMAX[lv]!), tb: 1, tribe, bel: 0 };
   S.homes.push(b);
   c.bmap[idx(x, y)] = b;
-  if (lv > S.maxLv) S.maxLv = lv;
-  if (S.homes.length === 1) toast(c, 'Your first home!');
-  sfx(c, 'settle');
+  if (tribe === 0) {
+    if (lv > S.maxLv) S.maxLv = lv;
+    if (blueHomes(S) === 1) toast(c, 'Your first home!');
+    sfx(c, 'settle');
+  }
   return b;
 }
 
@@ -140,7 +145,7 @@ export function destroyHome(c: Ctx, b: Home): void {
   S.homes = S.homes.filter((h) => h !== b);
   c.bmap[idx(b.x, b.y)] = null;
   S.vills = S.vills.filter((v) => v.home !== b.id);
-  settlersOut(c, b.x, b.y, Math.max(1, Math.floor(b.pop)));
+  settlersOut(c, b.x, b.y, Math.max(1, Math.floor(b.pop)), b.tribe);
 }
 
 export function destroyStruct(c: Ctx, s: Struct): void {
@@ -153,7 +158,7 @@ export function destroyStruct(c: Ctx, s: Struct): void {
       v.type = 'settler';
       v.role = 'settler';
     }
-  toast(c, STRUCTS[s.k].name + ' was lost');
+  if (s.tribe === 0) toast(c, STRUCTS[s.k].name + ' was lost');
   calcCrops(c);
 }
 
@@ -167,7 +172,7 @@ export function recheck(c: Ctx): void {
     }
     const l = levelFor(fields(c, b.x, b.y));
     if (l !== b.lv) {
-      if (l > b.lv) {
+      if (l > b.lv && b.tribe === 0) {
         sfx(c, 'build');
         if (l > S.maxLv) {
           S.maxLv = l;
@@ -178,7 +183,7 @@ export function recheck(c: Ctx): void {
       if (b.pop > BMAX[l]!) {
         const ex = Math.floor(b.pop - BMAX[l]!);
         b.pop = BMAX[l]!;
-        settlersOut(c, b.x, b.y, ex);
+        settlersOut(c, b.x, b.y, ex, b.tribe);
       }
     }
     b.tb = 1 + 0.1 * Math.min(6, countTrees(S, b.x, b.y, 2));
@@ -193,10 +198,13 @@ export function recheck(c: Ctx): void {
 /** Best place for a settler near (ox, oy): open land with many fields, or a home with room. */
 export function findSpot(c: Ctx, ox: number, oy: number, r: number, w: Vill): [number, number] | null {
   let best: [number, number] | null = null, bs = -1e9;
+  // the Red tribe only settles round its own Hearth
+  const RH = w.tribe === 1 ? rivalHearth(c.S) : null;
   for (let y = oy - r; y <= oy + r; y++)
     for (let x = ox - r; x <= ox + r; x++) {
       const tx = wrap(x), ty = wrap(y);
       const d = tdist(tx + 0.5, ty + 0.5, w.x, w.y) * 0.35;
+      if (RH && tdist(tx, ty, RH.x, RH.y) > BALANCE.rivalRange) continue;
       if (canSettle(c, tx, ty)) {
         const s = fields(c, tx, ty) - d;
         if (s > bs) {
@@ -205,7 +213,7 @@ export function findSpot(c: Ctx, ox: number, oy: number, r: number, w: Vill): [n
         }
       } else {
         const b = c.bmap[idx(tx, ty)];
-        if (b && b.kind === 'home' && b.pop + 1 <= BMAX[b.lv]!) {
+        if (b && b.kind === 'home' && b.tribe === w.tribe && b.pop + 1 <= BMAX[b.lv]!) {
           const s = (BMAX[b.lv]! - b.pop) * 0.4 - 1 - d;
           if (s > bs) {
             bs = s;
@@ -287,7 +295,14 @@ function planSettler(c: Ctx, w: Vill, cx: number, cy: number): void {
     wander(c, w);
     return;
   }
-  if (S.totem) {
+  const RH = w.tribe === 1 ? rivalHearth(S) : null;
+  if (RH && tdist(RH.x, RH.y, w.x, w.y) > BALANCE.rivalRange - 2) {
+    // wandered off: head home to the Red village
+    w.tx = wrap(RH.x + 0.5 + (c.rng.next() - 0.5) * 6);
+    w.ty = wrap(RH.y + 0.5 + (c.rng.next() - 0.5) * 6);
+    return;
+  }
+  if (S.totem && w.tribe === 0) {
     const [tx, ty] = S.totem;
     if (tdist(tx, ty, w.x, w.y) > 6) {
       const g = findSpot(c, tx, ty, 5, w);
@@ -317,12 +332,12 @@ function stepSettler(c: Ctx, w: Vill, dt: number, cx: number, cy: number): boole
     w.goal = null;
     w.think = 0;
     const b = c.bmap[idx(gx, gy)];
-    if (b && b.kind === 'home' && b.pop + 1 <= BMAX[b.lv]!) {
+    if (b && b.kind === 'home' && b.tribe === w.tribe && b.pop + 1 <= BMAX[b.lv]!) {
       b.pop += 1;
       return true;
     }
     if (canSettle(c, gx, gy)) {
-      newHome(c, gx, gy, 1);
+      newHome(c, gx, gy, 1, w.tribe);
       recheck(c);
       return true;
     }
@@ -526,7 +541,7 @@ export function syncResidents(c: Ctx, night: number): void {
   for (const v of S.vills) if (v.type === 'resident' && v.home !== null) cnt.set(v.home, (cnt.get(v.home) ?? 0) + 1);
   for (const b of S.homes) {
     const want = night > 0.5 ? 0 : Math.min(b.lv >= 3 ? 3 : 2, Math.floor(b.pop / 2)), have = cnt.get(b.id) ?? 0;
-    if (have < want) S.vills.push(mkV(c, 'resident', b.x + 0.5, b.y + 0.85, { home: b.id, t: c.rng.next() * 2 }));
+    if (have < want) S.vills.push(mkV(c, 'resident', b.x + 0.5, b.y + 0.85, { home: b.id, tribe: b.tribe, t: c.rng.next() * 2 }));
     else if (have > want) {
       const i = S.vills.findIndex((v) => v.home === b.id && v.type === 'resident');
       if (i >= 0) S.vills.splice(i, 1);
@@ -534,13 +549,18 @@ export function syncResidents(c: Ctx, night: number): void {
   }
 }
 
-/** Villagers who count towards the population: everyone in homes plus everyone out and about. */
+/** Our population: everyone in our homes plus everyone of ours out and about (held and flying too). */
 export function popCount(S: State): number {
+  return tribePop(S, 0);
+}
+
+/** A tribe's population. Villagers in the hand or in the air count for the tribe they belong to. */
+export function tribePop(S: State, t: Tribe): number {
   let p = 0;
-  for (const b of S.homes) p += Math.floor(b.pop);
-  for (const v of S.vills) if (v.type !== 'resident') p++;
-  if (S.held?.k === 'v') p++;
-  for (const f of S.flying) if (f.k === 'v') p++;
+  for (const b of S.homes) if (b.tribe === t) p += Math.floor(b.pop);
+  for (const v of S.vills) if (v.type !== 'resident' && v.tribe === t) p++;
+  if (S.held?.k === 'v' && S.held.v.tribe === t) p++;
+  for (const f of S.flying) if (f.k === 'v' && f.v.tribe === t) p++;
   return p;
 }
 
@@ -548,13 +568,13 @@ export function popCount(S: State): number {
 
 export function validSite(c: Ctx, k: StructKind, x: number, y: number): boolean {
   const S = c.S;
-  if (UNIQUE.includes(k) && S.structs.some((s) => s.k === k)) return false;
+  if (UNIQUE.includes(k) && S.structs.some((s) => s.k === k && s.tribe === 0)) return false;
   if (k === 'fish') return !isWater(S, x, y) && !!nearWater(S, x, y) && spaced(c, x, y) && !S.tree[idx(x, y)] && !S.rock[idx(x, y)];
   return canSettle(c, x, y);
 }
 
-export function placeStruct(c: Ctx, k: StructKind, x: number, y: number, prog: number): Struct {
-  const S = c.S, s: Struct = { kind: 'struct', id: S.uid++, k, x: wrap(x), y: wrap(y), prog, fert: 0 };
+export function placeStruct(c: Ctx, k: StructKind, x: number, y: number, prog: number, tribe: Tribe = 0): Struct {
+  const S = c.S, s: Struct = { kind: 'struct', id: S.uid++, k, x: wrap(x), y: wrap(y), prog, fert: 0, tribe };
   S.structs.push(s);
   c.bmap[idx(x, y)] = s;
   S.tree[idx(x, y)] = 0;
@@ -563,9 +583,10 @@ export function placeStruct(c: Ctx, k: StructKind, x: number, y: number, prog: n
 
 // ---------------------------------------------------------------- the hand
 
-export function nearStruct(S: State, x: number, y: number, r: number): Struct | null {
+export function nearStruct(S: State, x: number, y: number, r: number, tribe?: Tribe): Struct | null {
   let best: Struct | null = null, bd = r;
   for (const s of S.structs) {
+    if (tribe !== undefined && s.tribe !== tribe) continue;
     const d = tdist(s.x + 0.5, s.y + 0.5, x, y);
     if (d < bd) {
       bd = d;
@@ -579,6 +600,11 @@ export function nearStruct(S: State, x: number, y: number, r: number): Struct | 
 export function grabVillager(c: Ctx, v: Vill): boolean {
   const S = c.S, i = S.vills.indexOf(v);
   if (i < 0 || S.held) return false;
+  if (v.tribe === 1 && !inInfluence(S, v.x, v.y)) {
+    toast(c, 'Red villagers can only be picked up inside your land. Build homes closer to them');
+    sfx(c, 'no');
+    return false;
+  }
   S.vills.splice(i, 1);
   if (v.type === 'resident') {
     v.type = 'settler';
@@ -618,7 +644,7 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
   y = wrap(y);
   const tx = Math.floor(x), ty = Math.floor(y), t = idx(tx, ty);
   if (obj.k === 'tree') {
-    const s = nearStruct(S, x, y, 1.6);
+    const s = nearStruct(S, x, y, 1.6, 0);
     if (s && (s.k === 'hearth' || s.k === 'lumber')) {
       S.wood += 4;
       S.stat.woodIn += 4;
@@ -656,7 +682,15 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
   } else if (!quiet) S.stat.drops++;
   sfx(c, 'land');
   if (isWater(S, tx, ty)) spark(c, x, y, 'splash', 6);
-  const s = nearStruct(S, x, y, 1.3);
+  // a Red villager put down inside our land joins us
+  if (v.tribe === 1) {
+    if (inInfluence(S, x, y)) convertVill(c, v);
+    else if (!quiet && !S.hinted.redDrop) {
+      S.hinted.redDrop = 1;
+      toast(c, 'Put Red villagers down inside your own land to win them over');
+    }
+  }
+  const s = v.tribe === 0 ? nearStruct(S, x, y, 1.3, 0) : null;
   if (s && STRUCTS[s.k].cap > 0) {
     const def = STRUCTS[s.k];
     if (v.job === s.id) {
@@ -672,7 +706,7 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
     } else toast(c, `${def.name} is full (${def.cap} workers)`);
   } else {
     const b = c.bmap[t];
-    if (b && b.kind === 'home' && b.pop + 1 <= BMAX[b.lv]! && !thrown) {
+    if (b && b.kind === 'home' && b.tribe === v.tribe && b.pop + 1 <= BMAX[b.lv]! && !thrown) {
       b.pop += 1;
       spark(c, x, y, 'heart', 1);
       return;
@@ -681,3 +715,54 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
   S.vills.push(v);
 }
 
+
+// ---------------------------------------------------------------- the Red tribe
+
+/** Inside our land: near one of our homes (3 + level tiles) or buildings (the Hearth 8, others 5). */
+export function inInfluence(S: State, x: number, y: number): boolean {
+  for (const b of S.homes) if (b.tribe === 0 && tdist(b.x + 0.5, b.y + 0.5, x, y) <= 3 + b.lv) return true;
+  for (const s of S.structs) if (s.tribe === 0 && tdist(s.x + 0.5, s.y + 0.5, x, y) <= (s.k === 'hearth' ? 8 : 5)) return true;
+  return false;
+}
+
+/** A Red villager joins us. */
+export function convertVill(c: Ctx, v: Vill): void {
+  if (v.tribe === 0) return;
+  v.tribe = 0;
+  if (c.S.rival) c.S.rival.joined++;
+  spark(c, v.x, v.y, 'heart', 3);
+  sfx(c, 'settle');
+  toast(c, 'A Red villager joined your tribe');
+}
+
+/** A Red home joins us, with everyone in it. */
+export function convertHome(c: Ctx, b: Home): void {
+  const S = c.S;
+  if (b.tribe === 0) return;
+  b.tribe = 0;
+  b.bel = 0;
+  for (const v of S.vills) if (v.home === b.id) v.tribe = 0;
+  const n = Math.max(1, Math.floor(b.pop));
+  if (S.rival) S.rival.joined += n;
+  if (b.lv > S.maxLv) S.maxLv = b.lv;
+  spark(c, b.x + 0.5, b.y + 0.5, 'heart', 8);
+  sfx(c, 'magic');
+  toast(c, `A Red ${BN[b.lv]!.toLowerCase()} joined your tribe (+${n})`);
+  c.emit({ k: 'ui' });
+}
+
+/**
+ * Something wonderful (or naughty) happened near the Red tribe: their homes within r tiles
+ * are won over by `amount` (negative puts them off). Homes that reach 100 join us.
+ */
+export function impress(c: Ctx, x: number, y: number, r: number, amount: number): number {
+  let n = 0;
+  for (const b of c.S.homes.slice()) {
+    if (b.tribe !== 1 || tdist(b.x + 0.5, b.y + 0.5, x, y) > r) continue;
+    n++;
+    b.bel = Math.max(0, Math.min(100, b.bel + amount));
+    if (amount > 0) spark(c, b.x + 0.5, b.y + 0.5, 'heart', 1);
+    if (b.bel >= 100) convertHome(c, b);
+  }
+  return n;
+}

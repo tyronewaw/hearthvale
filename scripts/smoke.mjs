@@ -376,6 +376,40 @@ try {
     await pg.close();
   }
 
+  // ---------- the Red tribe ----------
+  {
+    const pg = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    watch(pg, 'rival');
+    await pg.goto(`${BASE}/?seed=42&nohelp&nopet&sandbox&nosave`);
+    await pg.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
+    await pg.evaluate(() => window.__hv.ff(150 * 1.5));
+    // the HUD's Red tribe row takes you to their village
+    await pg.click('#hrr');
+    await pg.evaluate(() => { const hv = window.__hv, S = hv.sim().S; S.t = Math.floor(S.t / 150) * 150 + 0.42 * 150; hv.rig.zoom = 0.32; hv.rig.apply(); });
+    await pg.mouse.move(80, 700);
+    await frames(pg, 10);
+    await pg.screenshot({ path: 'shots/rival-village.png' });
+    const info = await pg.evaluate(() => { const S = window.__hv.sim().S;
+      return { met: !!S.hinted.metRival, homes: S.homes.filter((b) => b.tribe === 1).length, people: S.vills.filter((v) => v.tribe === 1).length }; });
+    console.log('red tribe', info);
+    if (!info.met) errors.push('rival: clicking the Red tribe did not take us there');
+    if (!info.homes) errors.push('rival: no Red homes');
+    // win one home over: show a half-won pennant, then bless it until it joins
+    const home = await pg.evaluate(() => { const S = window.__hv.sim().S, reds = S.homes.filter((b) => b.tribe === 1);
+      reds.forEach((b, i) => { b.bel = i % 2 ? 50 : 88; });
+      return reds[0] ? { id: reds[0].id, x: reds[0].x, y: reds[0].y } : null; });
+    await frames(pg, 6);
+    await pg.screenshot({ path: 'shots/rival-winning.png' });
+    if (home) {
+      const joined = await pg.evaluate((h) => { const hv = window.__hv, sim = hv.sim(), S = sim.S; S.best = 999;
+        sim.useTool('bloom', h.x, h.y); return S.homes.find((b) => b.id === h.id)?.tribe === 0; }, home);
+      if (!joined) errors.push('rival: a blessing did not win the home over');
+      await frames(pg, 30);
+      await pg.screenshot({ path: 'shots/rival-joined.png' });
+    }
+    await pg.close();
+  }
+
   // ---------- other quality tiers (single shadow map paths) ----------
   for (const tier of ['high', 'medium', 'low']) {
     const pg = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });

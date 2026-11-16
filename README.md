@@ -16,14 +16,20 @@ It is being rebuilt in phases, and each phase ends playable.
 6. ✅ Blessings, quests, full UI, sound, saves (old 2D saves carry over)
 7. ✅ Performance (culling with the planet curve, tree LOD)
 8. ✅ Installable PWA that plays offline
+9. ✅ Pet pen and new tricks (Level, Rise, Build)
+10. ✅ The Red tribe: a rival people you win over, Black & White style
 
 ## Controls (so far)
 - **Hand** (`1`): grab villagers, trees and rocks. Let go gently to drop, or flick and let go to throw: they arc, bounce, splash and get up a little dizzy. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.
 - **Raise / Lower** (`2` / `3`): click to lift land, right-click to sink it, and hold to repeat. Homes grow with the flat land around them.
-- **Build** (`4`): Hearth, Farm, Lumber camp, Fishing hut, Shrine (they cost wood).
+- **Build** (`4`): Hearth, Farm, Lumber camp, Fishing hut, Shrine, Pet pen (they cost wood).
 - **Totem** (`5`): wanderers head there to look for land.
 - **Your pet** (sheep, monkey or chicken): click it with the Hand to stroke, right-click to scold, straight after something it did, to teach it. Drop trees on it as snacks. Leash it: Free, Follow, Stay or Send.
 - **Blessings** (`6`–`0`): Bloom, Level, Rain, Rise and Festival unlock as your tribe grows and cost faith.
+- **The Red tribe** lives on a far shore (click *Red tribe* in the top-left panel to look). Nobody fights. Win them over:
+  - build big homes and Shrines near them, hold festivals, bless their land, and let a kind pet play nearby;
+  - each of their homes' flags turns from red to blue as it warms to you;
+  - pick up their wanderers inside your land, or put them down there, and they join you.
 - Wheel to zoom, `Q`/`E` or right-drag to turn, `WASD` to pan, `Space` to pause. The world saves itself in your browser, and a world from the 2D prototype carries over.
 
 ## Install

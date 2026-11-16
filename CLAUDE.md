@@ -3,7 +3,7 @@
 A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and keyboard first; phones only need to keep working, with no new phone-specific work). It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. Next, chosen by the user: phase 9 (pet pen and more tricks) and phase 10 (a cosy rival tribe in terracotta red that you win over, Black & White style). Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. Phase 9 (pet pen and more tricks) and phase 10 (the Red tribe, won over Black & White style) were chosen by the user and built after that. Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
@@ -40,6 +40,8 @@ src/sim/      pure game rules. No three, DOM, Math.random or imports from other 
   blessings.ts bloom / rain / festival effects (tools in defs.TOOLS; the pet's tricks use them too)
   quests.ts   the quest chain (prototype's 13 + pen + tricks), stable ids, remapQuest() for older saves
   migrate.ts  migrateV2(): the prototype's 64² save set into a cleared basin at the planet's centre
+  rival.ts    the Red tribe: spawnRival (far shore), beliefRate/stepRival (winning homes over, the
+              Red elder levelling land, unity), festivalImpress, fixTribes (pre-tribe saves)
   sim.ts      Sim class: tick() = the prototype's update(); commands useTool, build, grab,
               grabTree/Rock, drop, release/landed; events queue (drain() each frame)
 src/render/   three.js only, and it reads sim state
@@ -140,6 +142,19 @@ legacy/       the 2D prototype (design reference; do not edit)
   - after: high 137k / 173k / 211k triangles (94–124 calls) at zoom 0.2 / 0.45 / 1
   - after: medium 93k–141k triangles (66–96 calls)
 - **WebGPU is deferred.** The bend uses `onBeforeCompile`, which WebGPURenderer doesn't support (it needs TSL).
+- **The Red tribe** (phase 10, the user's design choice: "win them over"). Nobody fights.
+  - Every home, struct and villager has `tribe` (0 ours, 1 Red). Red homes also have `bel` (0..100, how won over they are). `fixTribes` gives pre-tribe saves tribe 0.
+  - **Where they live.** New worlds spawn them at least `rivalMinDist` (40) tiles from our start, inland, in a flattened clearing with a Hearth, four homes and wanderers. Older saves meet them on load (`ensureRival`); a planet with no room never gets them (`hinted.noRival`).
+  - **How they live.** They grow without hunger (`rivalGrowth`), only settle within `rivalRange` (14) of their Hearth, never join our homes, stop at `rivalMax` (160) people, and have no jobs. Every `rivalElderEvery` seconds their elder smooths a gentle slope near their Hearth (through `petLevel`/`safeReshape`).
+  - **Winning them over.**
+    - Belief grows per second with our homes within 12 tiles (by level and closeness) and our Shrines, and during festivals. It fades on its own, and faster near their Hearth (`beliefRate`).
+    - Blessings within their radius + 4 add 15. A festival adds 15 to every Red home that can see us. The pet dancing, playing or casting nearby adds 6, and its mischief subtracts 6.
+    - At 100 a home joins us with everyone in it.
+    - Red villagers can be picked up only inside our influence (`inInfluence`: our homes 3 + level tiles, buildings 5, Hearth 8). Put down inside it, they join; Red wanderers standing in it join by chance.
+  - **Unity.** When no Red homes or villagers are left, `rival.united` is set and their buildings become ours. `popCount` and the goal count only our tribe, and converts count once they've joined.
+  - **Look.** Red villagers wear terracotta (`TRIBE_RED`). Every home carries a pennant: ours blue, theirs red, blending to blue with belief. The HUD's "Red tribe" row shows their number and jumps the camera there, which meets the "Neighbours" quest.
+  - **Quests.** "Neighbours", "A warm welcome" and "One people" (chain version 3).
+  - **Balance probe.** 500 people around day 8 and 1000 around day 12–13. The Red tribe caps at 160 by day 3, and a player who just expands wins them over around days 20–27. The probe's scripted player only acts for our tribe.
 - **Our tribe is blue (user's choice).** Villagers wear tribe-blue clothing, from the prototype's `TRIBE` blues (#3f6fc4, #3566b0, #4a7fd6, #2f5ea8). Jobs show as accents on top of the blue: farmer straw hat, forester green cap, fisher teal hat, builder orange headband and tool, priest white robe trim with a feather headdress. That way the whole tribe reads as one blue people from afar, and jobs are still clear up close. Blue also tints tribe flags and festival bunting. A future rival tribe gets a different colour.
 
 ## Conventions
@@ -157,6 +172,7 @@ legacy/       the 2D prototype (design reference; do not edit)
 - save: localStorage `hearthvale-v2`. The 3D game will use `hearthvale-v3` and migrate v2 (phase 6).
 
 ## Ideas queued
-- A rival tribe (phase 10).
 - Local AI-generated music or voices for the pet, made offline with free tools and shipped as our own assets. Parked by the user ("skip for now"). Their PC has an AMD Radeon RX 7900 XTX (24 GB), so prefer tools that run on AMD (ROCm on Linux/WSL, or DirectML/ONNX on Windows) over CUDA-only ones.
 - Move the `balance.ts` tunables to JSON for tuning without code.
+- Draw our influence border on the ground (Black & White style), so it's clear where Red villagers can be picked up and won over.
+- Red tribe life: their own little festivals, a Red shrine, and a mood line in the tooltip that says what would impress them most.

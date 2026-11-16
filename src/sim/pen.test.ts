@@ -126,7 +126,7 @@ describe('new tricks', () => {
 
     // a home on a little plateau right next to the patch: levelling would tip it, so nothing changes
     for (const [x, y] of [[31, 30], [32, 30], [31, 31], [32, 31]] as const) S.h[idx(x, y)] = 3;
-    sim.S.homes.push({ kind: 'home', id: S.uid++, x: 31, y: 30, lv: 0, pop: 1, tb: 1 });
+    sim.S.homes.push({ kind: 'home', id: S.uid++, x: 31, y: 30, lv: 0, pop: 1, tb: 1, tribe: 0, bel: 0 });
     sim.bmap[idx(31, 30)] = S.homes.at(-1)!;
     const before = S.h.slice();
     expect(petLevel(sim, 29, 29)).toBe(false);

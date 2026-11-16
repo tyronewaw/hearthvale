@@ -45,8 +45,8 @@ describe('save / load', () => {
 describe('flying villagers', () => {
   it('count towards the population while airborne, and are kept by a save', () => {
     const sim = Sim.newWorld(5);
-    const v = sim.S.vills[0]!;
-    const pop = sim.S.vills.length;
+    const ours = sim.S.vills.filter((o) => o.tribe === 0), v = ours[0]!;
+    const pop = ours.length;
     sim.grab(v.id);
     const obj = sim.release()!;
     expect(sim.S.flying).toHaveLength(1);

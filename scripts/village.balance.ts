@@ -9,18 +9,18 @@ import { it } from 'vitest';
 import { BMAX } from '../src/sim/defs';
 import { Sim } from '../src/sim/sim';
 import { bump } from '../src/sim/terrain';
-import { hearth, validSite, workersAt } from '../src/sim/village';
+import { hearth, tribePop, validSite, workersAt } from '../src/sim/village';
 import { DAY, TICK, idx, tdist, wrap } from '../src/sim/world';
 
 const DAYS = Number(process.env.DAYS ?? 30), SEED = Number(process.env.SEED ?? 42);
 
 it(`balance: ${DAYS} days, seed ${SEED}`, () => {
   const sim = Sim.newWorld(SEED), S = sim.S, R = sim.rng;
-  const rows: string[] = ['day   pop homes  sett  maxLv   food   wood  faith  farms  workers'];
+  const rows: string[] = ['day   pop homes  sett  maxLv   food   wood  faith  farms workers   red joined'];
   let next = 0;
   const flattenAround = () => {
     // Pick a home and level one stray vertex in its 5×5 to the home's height (1 faith a step).
-    const b = S.homes[R.int(Math.max(1, S.homes.length))];
+    const ours = S.homes.filter((o) => o.tribe === 0), b = ours[R.int(Math.max(1, ours.length))];
     if (!b || S.faith < 3) return;
     const h0 = S.h[idx(b.x, b.y)]!;
     for (let tries = 0; tries < 12; tries++) {
@@ -35,7 +35,7 @@ it(`balance: ${DAYS} days, seed ${SEED}`, () => {
       }
     }
   };
-  const settler = () => S.vills.find((v) => v.type === 'settler' && v.dizzy <= 0);
+  const settler = () => S.vills.find((v) => v.type === 'settler' && v.tribe === 0 && v.dizzy <= 0);
   const TPD = Math.round(DAY / TICK); // ticks per day (150 / 0.1 is not an exact float)
   for (let i = 0; i < DAYS * TPD; i++) {
     sim.tick();
@@ -51,7 +51,7 @@ it(`balance: ${DAYS} days, seed ${SEED}`, () => {
           if (S.tree[idx(x, y)] && tdist(x, y, H.x, H.y) < bd) { bd = tdist(x, y, H.x, H.y); best = [wrap(x), wrap(y)]; }
         if (best && sim.grabTree(...best)) sim.drop(H.x + 0.5, H.y + 0.5);
       }
-      const farms = S.structs.filter((s) => s.k === 'farm'), lumbers = S.structs.filter((s) => s.k === 'lumber');
+      const farms = S.structs.filter((s) => s.k === 'farm' && s.tribe === 0), lumbers = S.structs.filter((s) => s.k === 'lumber' && s.tribe === 0);
       const want = farms.length < 1 + Math.floor(S.popNow / 60) || (S.food < 30 && farms.length < 2 + S.popNow / 25) ? 'farm' : lumbers.length < 1 + Math.floor(S.popNow / 150) ? 'lumber' : null;
       if (H && want) {
         for (let tries = 0; tries < 40; tries++) {
@@ -60,6 +60,7 @@ it(`balance: ${DAYS} days, seed ${SEED}`, () => {
         }
       }
       for (const s of S.structs) {
+        if (s.tribe !== 0) continue; // the player only staffs our own buildings
         const cap = s.k === 'hearth' ? 2 : s.k === 'farm' ? 3 : 2;
         if (workersAt(S, s) < cap) {
           const v = settler();
@@ -69,12 +70,12 @@ it(`balance: ${DAYS} days, seed ${SEED}`, () => {
     }
     if ((i + 1) % TPD === 0) {
       const d = (i + 1) / TPD;
-      rows.push([d, S.popNow, S.homes.length, S.vills.filter((v) => v.type === 'settler').length, S.maxLv,
+      rows.push([d, S.popNow, S.homes.filter((b) => b.tribe === 0).length, S.vills.filter((v) => v.type === 'settler' && v.tribe === 0).length, S.maxLv,
         Math.round(S.food), Math.round(S.wood), Math.round(S.faith), S.structs.filter((s) => s.k === 'farm').length,
-        S.vills.filter((v) => v.type === 'worker').length].map((x, j) => String(x).padStart(j ? 6 : 3)).join(' '));
+        S.vills.filter((v) => v.type === 'worker').length, tribePop(S, 1), S.rival?.joined ?? 0].map((x, j) => String(x).padStart(j ? 6 : 3)).join(' '));
     }
   }
-  const cap = S.homes.reduce((n, b) => n + BMAX[b.lv]!, 0);
+  const cap = S.homes.filter((b) => b.tribe === 0).reduce((n, b) => n + BMAX[b.lv]!, 0);
   rows.push(`home capacity ${cap}, best pop ${S.best}`);
   mkdirSync('shots', { recursive: true });
   writeFileSync('shots/balance.txt', rows.join('\n') + '\n');

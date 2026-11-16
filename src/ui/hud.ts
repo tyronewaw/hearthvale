@@ -2,6 +2,7 @@ import { BALANCE } from '../sim/balance';
 import { STRUCTS, STRUCT_KINDS, TOOLS, type StructKind, type ToolId } from '../sim/defs';
 import { DAY, SEASONS, season, tod, type State } from '../sim/world';
 import { icon, structIcon } from './icons';
+import { blueHomes, tribePop } from '../sim/village';
 import { QUESTS } from '../sim/quests';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -15,6 +16,8 @@ export interface UiHandlers {
   /** The welcome screen was dismissed (a new player chooses their pet next). */
   helpClosed(): void;
   toggleSound(): boolean;
+  /** Look at the Red tribe's village. */
+  findRival(): void;
 }
 
 /** The HTML overlay: HUD, toolbar, toasts, tooltips and modals. Reads sim state, never writes it. */
@@ -33,6 +36,7 @@ export class Ui {
     $('bHelp').onclick = () => this.toggleHelp(true);
     $('bSound').onclick = () => this.setSound(this.h.toggleSound());
     $('bKeep').onclick = () => $('win').classList.remove('show');
+    $('hrr').onclick = () => this.h.findRival();
     // Offer to install the game as an app when the browser allows it (Chrome/Edge on desktop).
     let deferred: (Event & { prompt(): Promise<void> }) | null = null;
     addEventListener('beforeinstallprompt', (e) => {
@@ -126,8 +130,11 @@ export class Ui {
     $('hp').textContent = String(S.popNow);
     $('hpb').style.width = Math.min(100, (S.popNow / BALANCE.goal) * 100) + '%';
     $('hpm').title = `Progress to ${BALANCE.goal} villagers`;
-    $('hh').textContent = String(S.homes.length);
-    $('hw').textContent = String(S.vills.filter((v) => v.type === 'settler').length);
+    $('hh').textContent = String(blueHomes(S));
+    $('hw').textContent = String(S.vills.filter((v) => v.type === 'settler' && v.tribe === 0).length);
+    const rv = S.rival && !S.rival.united;
+    $('hrr').hidden = !rv;
+    if (rv) $('hr').textContent = String(tribePop(S, 1));
     const t = tod(S.t);
     $('hd').textContent = `Day ${Math.floor(S.t / DAY) + 1}`;
     $('hs').textContent = `${SEASONS[season(S.t)]}, ${t < 0.22 || t > 0.8 ? 'night' : t < 0.5 ? 'morning' : t < 0.68 ? 'afternoon' : 'evening'}`;
