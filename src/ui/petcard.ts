@@ -1,4 +1,5 @@
-import { HABITS, HNAME, PETS, STAGES, TRICK_NAME, alignment, petStage, type Leash, type PetKind } from '../sim/pet';
+import { HABITS, HNAME, PETS, STAGES, TRICKS, TRICK_NAME, alignment, petStage, type Leash, type PetKind } from '../sim/pet';
+import { builtPen } from '../sim/village';
 import { BALANCE } from '../sim/balance';
 import type { State } from '../sim/world';
 
@@ -59,6 +60,7 @@ export interface PetHandlers {
   leash(mode: Leash): void;
   send(): void;
   feed(): void;
+  pen(): void;
   find(): void;
 }
 
@@ -73,6 +75,7 @@ export class PetCard {
     $('lStay').onclick = () => this.h.leash('stay');
     $('bSend').onclick = () => this.h.send();
     $('bFeed').onclick = () => this.h.feed();
+    $('bPen').onclick = () => this.h.pen();
     $('bFind').onclick = () => this.h.find();
     $('petHead').onclick = () => $('petp').classList.toggle('open');
     $('bChoose').onclick = () => {
@@ -130,8 +133,12 @@ export class PetCard {
       const lv = Math.round(Math.min(5, Math.max(0.1, P.w[h])));
       return `<div class="habit"><span>${HNAME[h]}</span><span class="pips">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('')}</span></div>`;
     }).join('');
-    $('petTricks').textContent = P.tricks.length
+    const learning = TRICKS.filter((t) => !P.tricks.includes(t) && P.seen[t] > 0).map((t) => `${TRICK_NAME[t]} ${P.seen[t]}/2`);
+    $('petTricks').textContent = (P.tricks.length
       ? 'Tricks: ' + P.tricks.map((t) => TRICK_NAME[t]).join(', ')
-      : 'No tricks yet. Cast blessings near it to teach some';
+      : 'No tricks yet. Bless the land or build near it, twice, to teach some') + (learning.length ? '. Learning: ' + learning.join(', ') : '');
+    const pen = !!builtPen(S);
+    $<HTMLButtonElement>('bPen').disabled = !pen;
+    $('bPen').title = pen ? `Send ${P.name} home to its pen` : 'Build a Pet pen first';
   }
 }

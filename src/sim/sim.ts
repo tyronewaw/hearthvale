@@ -5,12 +5,12 @@ import { bloom, festival, rain } from './blessings';
 import { spreadTrees } from './flora';
 import { QUESTS } from './quests';
 import {
-  PETS, feedPet, mkPet, petCatch, stepPet, stepPoos, teach, watchLearn, type Habit, type Leash, type PetCtx, type PetKind,
+  PETS, feedPet, fixPet, mkPet, petCatch, stepPet, stepPoos, teach, watchLearn, type Habit, type Leash, type PetCtx, type PetKind,
 } from './pet';
 import { Rng } from './rng';
 import { bump, isWater, level, rise } from './terrain';
 import {
-  calcCrops, destroyHome, grabFlora, grabVillager, hearth, land, mkV, placeStruct, popCount, rebuildMap, recheck,
+  builtPen, calcCrops, destroyHome, grabFlora, grabVillager, land, mkV, placeStruct, popCount, rebuildMap, recheck,
   roleCount, spark, stepV, syncResidents, validSite, finish, type Ctx,
 } from './village';
 import { generateWorld } from './worldgen';
@@ -43,6 +43,7 @@ export class Sim implements Ctx, PetCtx {
     this.S = S;
     this.rng = new Rng(S.rngState);
     if (S.pet) {
+      fixPet(S.pet);
       S.pet.act = null;
       S.pet.carry = null;
     }
@@ -229,8 +230,10 @@ export class Sim implements Ctx, PetCtx {
     else if (id === 'isle') rise(S, vx, vy, touched);
     if (!ok) return false;
     this.pay(def.cost);
-    this.afterTerrain(touched);
+    this.reshape(touched);
     this.emit({ k: 'sfx', id: id === 'raise' ? 'up' : id === 'lower' ? 'down' : 'magic' });
+    // the pet watches Level and Rise too
+    if (S.pet && (id === 'flat' || id === 'isle')) watchLearn(this, id, vx, vy);
     return true;
   }
 
@@ -239,10 +242,16 @@ export class Sim implements Ctx, PetCtx {
     const S = this.S, cost = STRUCTS[k].wood;
     x = wrap(x);
     y = wrap(y);
+    if (k === 'pen' && !S.pet) {
+      this.emit({ k: 'toast', msg: 'Choose a pet first' });
+      this.emit({ k: 'sfx', id: 'no' });
+      return false;
+    }
     if (!validSite(this, k, x, y)) {
+      const dup = S.structs.some((s) => s.k === k) && (k === 'hearth' || k === 'pen');
       this.emit({
         k: 'toast',
-        msg: k === 'fish' ? 'A fishing hut must touch water, with space around it' : k === 'hearth' && hearth(S) ? 'You already have a Hearth' : 'Needs flat, clear land with space around it',
+        msg: k === 'fish' ? 'A fishing hut must touch water, with space around it' : dup ? `You already have a ${STRUCTS[k].name}` : 'Needs flat, clear land with space around it',
       });
       this.emit({ k: 'sfx', id: 'no' });
       return false;
@@ -258,6 +267,8 @@ export class Sim implements Ctx, PetCtx {
     this.emit({ k: 'sfx', id: 'settle' });
     recheck(this);
     if (k !== 'hearth' && !roleCount(S, 'builder')) this.emit({ k: 'toast', msg: 'Drop villagers on the Hearth to make builders' });
+    // the pet watches you build (twice teaches it to help)
+    if (S.pet && k !== 'hearth') watchLearn(this, 'build', x + 0.5, y + 0.5);
     return true;
   }
 
@@ -325,13 +336,25 @@ export class Sim implements Ctx, PetCtx {
   }
 
   /** Send: walk to (x, y) and stay there. */
-  sendPet(x: number, y: number): void {
+  sendPet(x: number, y: number, msg?: string): void {
     const P = this.S.pet;
     if (!P) return;
     P.mode = 'stay';
     P.post = [wrap(x), wrap(y)];
     P.act = { id: 'follow', ph: 'go', tx: P.post[0], ty: P.post[1], t: 0.1, tile: [Math.floor(P.post[0]), Math.floor(P.post[1])], go: 0 };
-    this.emit({ k: 'toast', msg: `${P.name} is on its way and will stay there` });
+    this.emit({ k: 'toast', msg: msg ?? `${P.name} is on its way and will stay there` });
+  }
+
+  /** Send the pet home to its pen to stay (and sleep when tired). */
+  penPet(): boolean {
+    const P = this.S.pet, pen = builtPen(this.S);
+    if (!P) return false;
+    if (!pen) {
+      this.emit({ k: 'toast', msg: 'Build a Pet pen first' });
+      return false;
+    }
+    this.sendPet(pen.x + 0.5, pen.y + 0.5, `${P.name} trots home to its pen`);
+    return true;
   }
 
   stroke(): Habit | null {
@@ -367,7 +390,7 @@ export class Sim implements Ctx, PetCtx {
   }
 
   /** Reshaped tiles lose their trees, flowers and rocks (the prototype's `after`), then buildings recheck. */
-  private afterTerrain(touched: Set<number>): void {
+  reshape(touched: Set<number>): void {
     if (!touched.size) return;
     const S = this.S;
     for (const t of touched) {

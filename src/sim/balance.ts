@@ -49,6 +49,14 @@ export const BALANCE = {
   teachWindow: 20,
   /** Seconds a sheep's fertiliser doubles a farm (proto). */
   fertSeconds: 45,
+  /** The pet pen: energy recovers this many times faster asleep in it, love grows per second, and waking fertilises farms within this many tiles. */
+  penRest: 2,
+  penLove: 0.25,
+  penFertR: 6,
+  /** Seconds between the pet's tricks (proto). */
+  trickCooldown: 110,
+  /** A pet's Build trick adds this much progress to a building site (×1.4 when grand). */
+  petBuild: 0.25,
   /** Blessing durations (proto). */
   rainSeconds: 25,
   festSeconds: 40,

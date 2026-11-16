@@ -44,6 +44,7 @@ const STRUCT_ROWS: Record<string, string[]> = {
   farm: ['.....tt.....', '....tttt....', '...tttttt...', '...bbkbb....', 'GgGgGgGgGgGg', 'bbbbbbbbbbbb', 'GgGgGgGgGgGg', 'bbbbbbbbbbbb', 'GgGgGgGgGgGg', 'bbbbbbbbbbbb'],
   lumber: ['............', '.tttttttttt.', 'ttttttttttTT', '.b........b.', '.b..TTTT..b.', '.b.TTTTTT.b.', '.bTTTTTTTTb.', '............', 'gggggggggggg', '............'],
   fish: ['....tttt....', '...tttttt...', '..tttttttt..', '...bbkbb....', '...bbkbb....', '.b.b..b.b...', 'uuuuuuuuuuuu', 'uUuu.ww.uUuu', 'uuu.wwww.uuu', 'uuuuuuuuuuuu'],
+  pen: ['....r.r.....', '...rrrrr....', '....rrr.....', '.....r......', '..tttttt....', '.ttttttTT...', 'b.b.b.b.b.b.', 'bbbbbbbbbbbb', 'b.b.b.b.b.b.', 'bbbbbbbbbbbb'],
   shrine: ['.....U......', '....UuU.....', '...UuuuU....', '....UuU.....', '.....U......', 's.........s.', 's.s.....s.s.', 's.s.sss.s.s.', 'ssssssssssss', '............'],
 };
 

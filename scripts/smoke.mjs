@@ -197,7 +197,9 @@ try {
   if (!target) errors.push('hand: could not pick up a villager to throw');
   else {
     await frames(desk, 3);
-    await desk.evaluate(() => window.__hv.throwHeld(-10, -6));
+    // measure from where it left the hand (the hand need not be over the villager's old spot)
+    const from = await desk.evaluate(() => window.__hv.throwHeld(-10, -6));
+    if (from) [target.vx, target.vz] = [from.x, from.z];
     await frames(desk, 3);
     await desk.screenshot({ path: 'shots/hand-throw-flight.png' });
     if (!(await waitLanded('throws', target.stat.throws))) errors.push('hand: thrown villager never landed as a throw');
@@ -338,6 +340,38 @@ try {
       await pg.mouse.move(80, 700);
       await frames(pg, 8);
       await pg.screenshot({ path: `shots/pet-${kind}.png` });
+    }
+    // the pet pen: build one by the village, then see the pet asleep in it at night and about by day
+    const pen = await pg.evaluate(() => {
+      const hv = window.__hv, sim = hv.sim(), S = sim.S, [sx, sy] = S.start;
+      S.wood = 999;
+      for (let r = 3; r < 14; r++)
+        for (let k = 0; k < 24; k++) {
+          const a = (k / 24) * Math.PI * 2, x = Math.round(sx + Math.cos(a) * r), y = Math.round(sy + Math.sin(a) * r);
+          if (sim.build('pen', x, y)) {
+            const s = S.structs.find((o) => o.k === 'pen'); s.prog = 1;
+            return [s.x, s.y];
+          }
+        }
+      return null;
+    });
+    if (!pen) errors.push('pet: could not build a pen');
+    else {
+      await pg.evaluate(([x, y]) => { const hv = window.__hv, S = hv.sim().S, P = S.pet;
+        P.x = P.px = x + 0.5; P.y = P.py = y + 0.5; P.mode = 'stay'; P.post = [x + 0.5, y + 0.5]; P.need.energy = 20;
+        P.act = { id: 'sleep', ph: 'do', tx: x + 0.5, ty: y + 0.5, t: 999, go: 0, tile: [x, y], pen: true };
+        S.t = Math.floor(S.t / 150) * 150 + 0.92 * 150;
+        const r = hv.rig; r.fx = x + 0.5; r.fz = y + 0.5; r.zoom = 0.12; r.apply(); }, pen);
+      await frames(pg, 10);
+      await pg.screenshot({ path: 'shots/pet-pen-night.png' });
+      const e0 = await pg.evaluate(() => window.__hv.sim().S.pet.need.energy);
+      await pg.evaluate(() => window.__hv.ff(30));
+      const e1 = await pg.evaluate(() => window.__hv.sim().S.pet.need.energy);
+      if (!(e1 > e0 + 20)) errors.push(`pet: no faster rest in the pen (${e0} -> ${e1})`);
+      await pg.evaluate(([x, y]) => { const S = window.__hv.sim().S, P = S.pet; S.t = Math.floor(S.t / 150) * 150 + 0.45 * 150;
+        P.x = P.px = x + 0.5; P.y = P.py = y + 1.2; P.act = { id: 'wander', ph: 'do', tx: P.x, ty: P.y, t: 99, go: 0, tile: [x, y + 1] }; }, pen);
+      await frames(pg, 10);
+      await pg.screenshot({ path: 'shots/pet-pen-day.png' });
     }
     await pg.close();
   }

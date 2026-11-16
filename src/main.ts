@@ -3,6 +3,7 @@ import '@fontsource/pixelify-sans/600.css';
 import './ui/styles.css';
 import { Vector3 } from 'three';
 import { BMAX, BN, BTH, ROLE_NAME, STRUCTS, type StructKind, type ToolId } from './sim/defs';
+import { BALANCE } from './sim/balance';
 import { SAVE_KEY, deserialize, serialize } from './sim/save';
 import { V2_KEY, migrateV2 } from './sim/migrate';
 import { Audio } from './audio/audio';
@@ -40,7 +41,8 @@ export interface HvDebug {
   physicsReady(): boolean;
   lastThrow(): unknown;
   /** Throw whatever the hand holds with a given ground velocity (deterministic, for tests). */
-  throwHeld(vx: number, vz: number): void;
+  /** Throw whatever the hand holds with this velocity; returns where it left the hand (tiles). */
+  throwHeld(vx: number, vz: number): { x: number; z: number } | null;
   /** Jump the clock to a time of day (0..1) on the current day, for screenshots. */
   timeOfDay(t: number): void;
   save(): void;
@@ -160,6 +162,9 @@ const petCard = new PetCard({
   },
   feed: () => {
     sim.feed();
+  },
+  pen: () => {
+    sim.penPet();
   },
   find: () => {
     const P = sim.S.pet;
@@ -357,8 +362,11 @@ function tooltip(): string | null {
       (b.tb > 1 ? `<br>Trees nearby: growth +${Math.round((b.tb - 1) * 100)}%` : '');
   }
   if (b?.kind === 'struct') {
-    const D = STRUCTS[b.k], n = workersAt(S, b);
-    return `<b>${D.name}</b>${b.prog < 1 ? ` · building ${Math.round(b.prog * 100)}%` : ''}<br>${n} of ${D.cap} ${D.role}s` +
+    const D = STRUCTS[b.k], n = workersAt(S, b), building = b.prog < 1 ? ` · building ${Math.round(b.prog * 100)}%` : '';
+    if (b.k === 'pen')
+      return `<b>${S.pet ? S.pet.name + "'s pen" : D.name}</b>${building}<br>Sleeps here and rests twice as fast` +
+        `<br>Bedding fertilises farms within ${BALANCE.penFertR} tiles`;
+    return `<b>${D.name}</b>${building}<br>${n} of ${D.cap} ${D.role}s` +
       (b.k === 'hearth' ? `<br>Store: ${Math.floor(S.food)} food, ${Math.floor(S.wood)} wood` : '') +
       (b.fert > 0 ? '<br>Fertilised: double harvest' : '');
   }
@@ -489,11 +497,12 @@ window.__hv = {
   lastThrow: () => lastThrow,
   throwHeld: (vx, vz) => {
     const held = sim.S.held;
-    if (!held) return;
+    if (!held) return null;
     const g = R.hand.grip, obj = sim.release()!, sp = Math.hypot(vx, vz);
     const y = held.k === 'v' ? g.y - 0.52 + VILL_CENTRE : g.y - 0.5;
     if (physics) physics.launch(obj, wrap(g.x), y, wrap(g.z), vx, 2.5 + sp * 0.3, vz, true, 1);
     else sim.landed(obj, wrap(g.x + vx), wrap(g.z + vz), true);
+    return { x: wrap(g.x), z: wrap(g.z) };
   },
 };
 

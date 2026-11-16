@@ -161,8 +161,31 @@ function shrineModel(): Model {
   return { geo: k.build(), glows: [], smoke: null, fire: null, r: 0.6, h: 0.6 };
 }
 
+/** The pet pen: a round paddock fence with a gate at the front, a lean-to shelter, a hay bed and a trough. */
+function penModel(): Model {
+  const k = new Kit(), R = 0.72, n = 16, gate = (a: number) => Math.abs(Math.atan2(Math.sin(a - Math.PI / 2), Math.cos(a - Math.PI / 2))) < 0.3;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, b = ((i + 1) / n) * Math.PI * 2;
+    k.add(new BoxGeometry(0.045, 0.3, 0.045), POLE, { pos: [Math.cos(a) * R, 0.15, Math.sin(a) * R] });
+    if (gate(a) || gate(b)) continue;
+    const m = (a + b) / 2, len = 2 * R * Math.sin(Math.PI / n) + 0.02;
+    for (const y of [0.12, 0.24]) k.add(new BoxGeometry(len, 0.028, 0.025), WOOD, { pos: [Math.cos(m) * R, y, Math.sin(m) * R], rot: [0, Math.PI / 2 - m, 0] });
+  }
+  // lean-to shelter at the back
+  k.add(new BoxGeometry(0.7, 0.36, 0.035), (f) => (f % 3 ? WATTLE[0]! : WATTLE[1]!), { pos: [0, 0.18, -0.58] });
+  for (const x of [-0.33, 0.33]) k.add(new BoxGeometry(0.035, 0.26, 0.035), POLE, { pos: [x, 0.13, -0.2] });
+  k.add(new BoxGeometry(0.84, 0.045, 0.52), (f) => (f % 4 < 2 ? THATCH[0]! : THATCH[1]!), { pos: [0, 0.32, -0.4], rot: [0.32, 0, 0] });
+  // hay bed, trough, and a tribe flag by the gate
+  k.add(new CylinderGeometry(0.3, 0.33, 0.05, 12), (f) => (f % 3 ? '#e8c860' : '#d4ad48'), { pos: [0, 0.025, -0.08], scale: [1, 1, 0.8] });
+  k.add(new BoxGeometry(0.32, 0.09, 0.13), WOOD, { pos: [0.42, 0.045, 0.2], rot: [0, 0.5, 0] });
+  k.add(new BoxGeometry(0.27, 0.02, 0.09), '#c9a35a', { pos: [0.42, 0.095, 0.2], rot: [0, 0.5, 0] });
+  k.add(new CylinderGeometry(0.016, 0.016, 0.62, 5), POLE, { pos: [-0.3, 0.31, R + 0.02] });
+  k.add(new BoxGeometry(0.17, 0.1, 0.012), TRIBE_BLUE[0]!, { pos: [-0.21, 0.55, R + 0.02] });
+  return { geo: k.build(), glows: [[0.26, 0.3, R + 0.03, 0, 0.06, 0.08]], smoke: null, fire: null, r: R + 0.05, h: 0.62 };
+}
+
 export function structModels(): Record<StructKind, Model> {
-  return { hearth: hearthModel(), farm: farmModel(), lumber: lumberModel(), fish: fishModel(), shrine: shrineModel() };
+  return { hearth: hearthModel(), farm: farmModel(), lumber: lumberModel(), fish: fishModel(), shrine: shrineModel(), pen: penModel() };
 }
 
 /** Scaffolding drawn round a building site (unit radius; scaled per site). */
