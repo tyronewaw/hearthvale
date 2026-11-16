@@ -14,8 +14,8 @@ It is being rebuilt in phases, and each phase ends playable.
 4. ✅ The god hand with physics grab and throw
 5. ✅ The god pet: needs, habits, teaching, tricks
 6. ✅ Blessings, quests, full UI, sound, saves (old 2D saves carry over)
-7. Mobile polish and performance
-8. Installable PWA
+7. ✅ Performance (culling with the planet curve, tree LOD)
+8. ✅ Installable PWA that plays offline
 
 ## Controls (so far)
 - **Hand** (`1`): grab villagers, trees and rocks. Let go gently to drop, or flick and let go to throw: they arc, bounce, splash and get up a little dizzy. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.
@@ -26,6 +26,9 @@ It is being rebuilt in phases, and each phase ends playable.
 - **Blessings** (`6`–`0`): Bloom, Level, Rain, Rise and Festival unlock as your tribe grows and cost faith.
 - Wheel to zoom, `Q`/`E` or right-drag to turn, `WASD` to pan, `Space` to pause. The world saves itself in your browser, and a world from the 2D prototype carries over.
 
+## Install
+In Chrome or Edge, use the **Install** button in the game's top bar (or the install icon in the address bar). Hearthvale then opens in its own window and works offline. It saves in your browser, so your world is waiting next time.
+
 ## Develop
 ```bash
 npm install
@@ -33,6 +36,7 @@ npm run dev      # http://localhost:5173  (try ?sandbox&stats, ?q=low|medium|hig
 npm run check    # typecheck + unit tests
 npm run smoke    # build + headless browser play-through + screenshots in shots/
 npm run balance  # 30-day scripted play-through, growth table in shots/balance.txt
+npm run perf     # draw calls / triangles at three zooms
 ```
 
 See `CLAUDE.md` for the architecture and `ASSETS.md` for licences.

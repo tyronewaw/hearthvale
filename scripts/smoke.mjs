@@ -354,6 +354,36 @@ try {
     await pg.close();
   }
 
+  // ---------- installable and offline ----------
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const pg = await ctx.newPage();
+    watch(pg, 'pwa');
+    await pg.goto(`${BASE}/?seed=42&nohelp&nopet&nosave`);
+    await pg.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 });
+    const manifest = await pg.evaluate(() => document.querySelector('link[rel=manifest]')?.getAttribute('href'));
+    if (!manifest) errors.push('pwa: no manifest link');
+    const sw = await pg.evaluate(() => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 20000))]));
+    if (!sw) errors.push('pwa: service worker never became ready');
+    else {
+      // let the precache finish, then play offline
+      await pg.waitForFunction(() => caches.keys().then((k) => k.length > 0), null, { timeout: 20000 });
+      await pg.waitForTimeout(1500);
+      await ctx.setOffline(true);
+      await pg.reload();
+      const offline = await pg.waitForFunction(() => window.__hv?.ready, null, { timeout: 30000 }).then(() => true).catch(() => false);
+      console.log('plays offline:', offline);
+      if (!offline) errors.push('pwa: the game did not load offline');
+      // the untouched prototype loads its font from Google, which fails offline (expected)
+      const lp = await ctx.newPage();
+      watch(lp, 'pwa-legacy', (t) => /Failed to load resource|ERR_|net::/.test(t));
+      const legacyOffline = await lp.goto(`${BASE}/legacy/`).then(() => lp.evaluate(() => !!document.querySelector('#cv'))).catch(() => false);
+      console.log('prototype offline:', legacyOffline);
+      if (!legacyOffline) errors.push('pwa: /legacy/ did not load offline');
+    }
+    await ctx.close();
+  }
+
   // ---------- legacy prototype ----------
   const leg = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   // The prototype loads its font from Google; a blocked font request is not a game error.
