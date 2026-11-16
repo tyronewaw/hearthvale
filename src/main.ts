@@ -9,7 +9,7 @@ import { V2_KEY, migrateV2 } from './sim/migrate';
 import { Audio } from './audio/audio';
 import { TOOL } from './sim/defs';
 import { Sim } from './sim/sim';
-import { beliefRate } from './sim/rival';
+import { beliefRate, rivalMood } from './sim/rival';
 import { fields, inInfluence, rivalHearth, validSite, workersAt } from './sim/village';
 import { DAY, TICK, idx, tdist, wd, wrap } from './sim/world';
 import { bendDrop } from './render/bend';
@@ -246,7 +246,21 @@ const controls = new Controls(canvas, rig, {
   },
   togglePause,
   toggleHelp: () => ui.toggleHelp(),
+  toggleBorder: () => {
+    R.border.visible = !R.border.visible;
+    ui.toast(R.border.visible ? 'Borders shown (B to hide)' : 'Borders hidden (B to show)');
+    try {
+      localStorage.setItem('hearthvale-border', R.border.visible ? 'on' : 'off');
+    } catch {
+      /* storage blocked */
+    }
+  },
 });
+try {
+  R.border.visible = localStorage.getItem('hearthvale-border') !== 'off';
+} catch {
+  /* storage blocked */
+}
 
 const pp = new Vector3(), pr = new Vector3();
 /** Is the pet drawn under this screen point? */
@@ -374,7 +388,7 @@ function tooltip(): string | null {
     const r = beliefRate(S, b);
     return `<b>Red tribe ${BN[b.lv]!.toLowerCase()}</b> · ${Math.floor(b.pop)} villagers<br>Won over: ${Math.floor(b.bel)}%` +
       `<br>${r > 0.05 ? 'Warming to you' : r > -0.05 ? 'Unsure about you' : 'Not impressed yet'}` +
-      '<br>Big homes and Shrines nearby, festivals, blessings and a kind pet win them over';
+      `<br><i>${rivalMood(S, b)}</i>`;
   }
   if (b?.kind === 'home') {
     const f = fields(sim, b.x, b.y);
@@ -382,7 +396,11 @@ function tooltip(): string | null {
       (b.lv < 5 ? `<br>${BTH[b.lv + 1]} fields to become a ${BN[b.lv + 1]!.toLowerCase()}` : '') +
       (b.tb > 1 ? `<br>Trees nearby: growth +${Math.round((b.tb - 1) * 100)}%` : '');
   }
-  if (b?.kind === 'struct' && b.tribe === 1) return `<b>The Red tribe's Hearth</b><br>${S.rival ? S.rival.joined : 0} of them have joined you so far`;
+  if (b?.kind === 'struct' && b.tribe === 1)
+    return b.k === 'shrine'
+      ? `<b>The Red tribe's shrine</b>${b.prog < 1 ? ` · building ${Math.round(b.prog * 100)}%` : ''}<br>Homes near it are more loyal to their own ways`
+      : `<b>The Red tribe's Hearth</b><br>${S.rival ? S.rival.joined : 0} of them have joined you so far` +
+        (S.rival && S.rival.fest > 0 ? '<br>They are celebrating! Kindness counts double' : '');
   if (b?.kind === 'struct') {
     const D = STRUCTS[b.k], n = workersAt(S, b), building = b.prog < 1 ? ` · building ${Math.round(b.prog * 100)}%` : '';
     if (b.k === 'pen')

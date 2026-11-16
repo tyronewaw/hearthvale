@@ -179,7 +179,7 @@ function trickTarget(c: PetCtx, t: Trick, cx: number, cy: number, r: number): { 
   if (t === 'isle') return at(findTile(c, cx, cy, Math.min(r, 10), (x, y) => riseSpot(c, x, y)));
   let best: { tile: [number, number]; s: number } | null = null, bd = r;
   for (const s of S.structs)
-    if (s.prog < 1) {
+    if (s.prog < 1 && s.tribe === 0) {
       const d = tdist(s.x, s.y, cx, cy);
       if (d < bd) {
         bd = d;

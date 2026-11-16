@@ -18,6 +18,7 @@ import { castsShadow, worldMat } from './materials';
 import { Particles } from './particles';
 import { PetView } from './pets';
 import { Effects } from './effects';
+import { Border } from './border';
 import type { Quality } from './quality';
 import { WATER_Y, standY, yOf } from './scale';
 import { Sky } from './sky';
@@ -76,6 +77,8 @@ export class GameRenderer {
   readonly hand: Hand;
   readonly pet: PetView;
   private effects: Effects;
+  /** Our land's border (blue) and the Red tribe's (red), drawn on the ground. */
+  readonly border: Border;
   private dirty = new Set<number>();
   /** Which chunks the camera can see this frame (frustum test on bent bounds). */
   readonly vis = new Uint8Array(CHUNKS * CHUNKS);
@@ -121,6 +124,7 @@ export class GameRenderer {
     this.hand = new Hand(this.scene);
     this.pet = new PetView(this.scene);
     this.effects = new Effects(this.scene);
+    this.border = new Border(this.scene);
   }
 
   /** Water splash at torus (x, z). */
@@ -221,11 +225,14 @@ export class GameRenderer {
     this.villagers.update(S, fx, fz, time, view.alpha, this.rig.dist * 1.25 + 14, extra);
     this.pet.update(S, fx, fz, time, view.alpha);
     this.effects.update(S, fx, fz, time, this.sky.night);
+    this.border.update(S, fx, fz, time, view.dt);
     this.effects.cursor(S, view.bless?.at ?? null, view.bless?.r ?? 0, view.bless?.square ?? false, fx, fz, view.bless?.ok ?? true);
     // festival music: notes rise from people dancing in the streets
-    if (S.fest > 0 && S.vills.length && Math.random() < view.dt * 6) {
-      const v = S.vills[Math.floor(Math.random() * S.vills.length)]!;
-      this.particles.emit('note', v.x, standY(S, v.x, v.y) + 0.7, v.y, 1);
+    const redFest = !!S.rival && S.rival.fest > 0;
+    if ((S.fest > 0 || redFest) && S.vills.length && Math.random() < view.dt * 6) {
+      const pool = S.fest > 0 ? S.vills : S.vills.filter((o) => o.tribe === 1);
+      const v = pool[Math.floor(Math.random() * pool.length)];
+      if (v) this.particles.emit('note', v.x, standY(S, v.x, v.y) + 0.7, v.y, 1);
     }
     this.particles.update(view.dt, fx, fz);
 

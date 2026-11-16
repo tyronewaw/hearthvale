@@ -201,6 +201,9 @@ export interface Rival {
   united: boolean;
   /** Seconds until the Red elder next smooths some land for them. */
   elder: number;
+  /** Seconds left of their festival (0 when none), and until the next one. */
+  fest: number;
+  festIn: number;
 }
 
 export const season = (t: number): number => Math.floor(t / DAY / 3) % 4;

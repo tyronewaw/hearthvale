@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { BALANCE } from './balance';
 import { finishAct, type PetAct } from './pet';
 import { QUESTS } from './quests';
-import { beliefRate, fixTribes, stepRival } from './rival';
+import { beliefRate, fixTribes, rivalMood, rivalShrine, stepRival } from './rival';
 import { deserialize, serialize } from './save';
 import { Sim } from './sim';
-import { convertHome, inInfluence, mkV, newHome, placeStruct, popCount, rivalHearth, tribePop } from './village';
+import { convertHome, inInfluence, influenceField, mkV, newHome, placeStruct, popCount, rivalHearth, tribePop } from './village';
 import { emptyState } from './worldgen';
-import { DAY, TICK, tdist } from './world';
+import { DAY, N, TICK, idx, tdist } from './world';
 
 const run = (sim: Sim, seconds: number) => {
   for (let i = 0; i < seconds / TICK; i++) sim.tick();
@@ -22,7 +22,7 @@ function redSim(): Sim {
   placeStruct(sim, 'hearth', 10, 10, 1);
   placeStruct(sim, 'hearth', 60, 60, 1, 1);
   newHome(sim, 70, 60, 4, 1);
-  sim.S.rival = { joined: 0, united: false, elder: 999 };
+  sim.S.rival = { joined: 0, united: false, elder: 999, fest: 0, festIn: 9999 };
   sim.drain();
   return sim;
 }
@@ -142,5 +142,62 @@ describe('winning them over', () => {
     S.homes.push({ kind: 'home', id: S.uid++, x: 90, y: 90, lv: 5, pop: BALANCE.rivalMax, tb: 1, tribe: 1, bel: 0 });
     run(sim, 20);
     expect(red.pop).toBe(2);
+  });
+});
+
+describe('Red tribe life', () => {
+  it('they hold festivals now and then: kindness counts double, and their homes grow faster', () => {
+    const sim = redSim(), S = sim.S, red = S.homes.find((b) => b.tribe === 1)!;
+    S.rival!.festIn = 1;
+    stepRival(sim, 1);
+    expect(S.rival!.fest).toBe(BALANCE.rivalFestSeconds);
+    expect(sim.drain().some((e) => e.k === 'toast' && /festival/.test(e.msg))).toBe(true);
+    expect(rivalMood(S, red)).toMatch(/celebrating/);
+    sim.sandbox = true;
+    S.best = 999;
+    sim.useTool('bloom', 70, 62);
+    expect(red.bel).toBeCloseTo(BALANCE.impressBless * BALANCE.rivalFestJoy);
+    // it ends, and the next one is a couple of days away
+    for (let i = 0; i < BALANCE.rivalFestSeconds; i++) stepRival(sim, 1);
+    expect(S.rival!.fest).toBe(0);
+    expect(S.rival!.festIn).toBeGreaterThan(BALANCE.rivalFestEvery * 0.7);
+  });
+
+  it('a grown Red village builds a shrine, and homes near it are more loyal', () => {
+    const sim = redSim(), S = sim.S;
+    for (let i = 0; i < 6; i++) newHome(sim, 64 + (i % 3) * 3, 66 + Math.floor(i / 3) * 3, 8, 1);
+    expect(rivalShrine(S)).toBeUndefined();
+    stepRival(sim, 1);
+    const RS = rivalShrine(S)!;
+    expect(RS).toBeDefined();
+    expect(RS.tribe).toBe(1);
+    expect(tdist(RS.x, RS.y, 60, 60)).toBeLessThanOrEqual(6.5);
+    expect(sim.drain().some((e) => e.k === 'toast' && /Shrine is built/.test(e.msg))).toBe(false);
+    const near = S.homes.find((b) => b.tribe === 1 && tdist(b.x, b.y, RS.x, RS.y) < BALANCE.rivalShrineR)!;
+    const before = beliefRate(S, near);
+    RS.prog = 1;
+    expect(beliefRate(S, near)).toBeCloseTo(before - BALANCE.belRedShrine);
+  });
+
+  it('their tooltip says what would win them over', () => {
+    const sim = redSim(), S = sim.S, red = S.homes.find((b) => b.tribe === 1)!;
+    expect(rivalMood(S, red)).toMatch(/hardly seen/);
+    const ours = newHome(sim, 74, 60, 2);
+    ours.lv = 1;
+    expect(rivalMood(S, red)).toMatch(/small/);
+    ours.lv = 3;
+    expect(rivalMood(S, red)).toMatch(/Shrine/);
+    placeStruct(sim, 'shrine', 74, 64, 1);
+    expect(rivalMood(S, red)).toMatch(/Warming|Loyal/);
+  });
+
+  it('the influence field is exactly where inInfluence changes, for both tribes', () => {
+    const sim = Sim.newWorld(42);
+    run(sim, DAY);
+    for (const t of [0, 1] as const) {
+      const F = influenceField(sim.S, t);
+      for (let y = 0; y < N; y += 3)
+        for (let x = 0; x < N; x += 3) expect(F[idx(x, y)]! >= 0).toBe(inInfluence(sim.S, x, y, t));
+    }
   });
 });

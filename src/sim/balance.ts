@@ -82,6 +82,19 @@ export const BALANCE = {
   impressPet: 6,
   /** Chance per second that a Red wanderer inside our land joins us. */
   rivalWanderJoin: 0.02,
+  /**
+   * Red festivals (phase 11): about every rivalFestEvery seconds (±20%) they celebrate for
+   * rivalFestSeconds. Their homes grow ×rivalFestGrowth, and blessings, festivals and the pet
+   * impress them ×rivalFestJoy meanwhile.
+   */
+  rivalFestEvery: 300,
+  rivalFestSeconds: 35,
+  rivalFestGrowth: 1.5,
+  rivalFestJoy: 2,
+  /** At this many people the Red elder builds a shrine; Red homes within rivalShrineR of it lose belRedShrine belief a second more. */
+  rivalShrinePop: 40,
+  rivalShrineR: 8,
+  belRedShrine: 0.12,
   /** Blessing durations (proto). */
   rainSeconds: 25,
   festSeconds: 40,

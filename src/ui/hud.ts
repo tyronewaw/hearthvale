@@ -134,7 +134,10 @@ export class Ui {
     $('hw').textContent = String(S.vills.filter((v) => v.type === 'settler' && v.tribe === 0).length);
     const rv = S.rival && !S.rival.united;
     $('hrr').hidden = !rv;
-    if (rv) $('hr').textContent = String(tribePop(S, 1));
+    if (rv) {
+      $('hr').textContent = String(tribePop(S, 1));
+      $('hrl').textContent = S.rival!.fest > 0 ? 'Red festival!' : 'Red tribe';
+    }
     const t = tod(S.t);
     $('hd').textContent = `Day ${Math.floor(S.t / DAY) + 1}`;
     $('hs').textContent = `${SEASONS[season(S.t)]}, ${t < 0.22 || t > 0.8 ? 'night' : t < 0.5 ? 'morning' : t < 0.68 ? 'afternoon' : 'evening'}`;

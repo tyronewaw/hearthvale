@@ -3,7 +3,7 @@
 A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and keyboard first; phones only need to keep working, with no new phone-specific work). It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. Phase 9 (pet pen and more tricks) and phase 10 (the Red tribe, won over Black & White style) were chosen by the user and built after that. Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. Phase 9 (pet pen and more tricks), phase 10 (the Red tribe, won over Black & White style) and phase 11 (land borders on the ground, Red festivals and shrine) were chosen by the user and built after that. Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
@@ -41,7 +41,8 @@ src/sim/      pure game rules. No three, DOM, Math.random or imports from other 
   quests.ts   the quest chain (prototype's 13 + pen + tricks), stable ids, remapQuest() for older saves
   migrate.ts  migrateV2(): the prototype's 64² save set into a cleared basin at the planet's centre
   rival.ts    the Red tribe: spawnRival (far shore), beliefRate/stepRival (winning homes over, the
-              Red elder levelling land, unity), festivalImpress, fixTribes (pre-tribe saves)
+              Red elder levelling land, their festivals and shrine, unity), festivalImpress,
+              rivalMood (tooltip advice), fixTribes (pre-tribe saves)
   sim.ts      Sim class: tick() = the prototype's update(); commands useTool, build, grab,
               grabTree/Rock, drop, release/landed; events queue (drain() each frame)
 src/render/   three.js only, and it reads sim state
@@ -59,7 +60,9 @@ src/render/   three.js only, and it reads sim state
   villagers.ts per-part instanced villagers (blue tribe), procedural walk/work/wave/sit/swim/held,
               blob shadows, culled to the view, screen-space pick()
   particles.ts pooled particles: lit (smoke, puffs, leaves, splashes) and glowing (sparks, hearts…)
-  effects.ts  rain clouds and streaks, festival bunting and lanterns, fireflies, blessing radius cursor
+  effects.ts  rain clouds and streaks, festival bunting and lanterns (ours, and the Red tribe's in their colours), fireflies, blessing radius cursor
+  border.ts   land borders on the ground: the 0 contour of each tribe's influenceField, as instanced segments (B toggles)
+  contour.ts  marching squares on the wrapped vertex grid (pure, tested)
   pets.ts     PetView: sheep / monkey / chicken built in code, ×0.6 / ×1.15 / ×1.75 by stage, walk
               cycle, bob, squash-and-stretch, eat/sleep/dance/play poses, nature halo, thought bubble
   hand.ts     the god hand: code-built right hand, jointed fingers, blended poses
@@ -154,6 +157,17 @@ legacy/       the 2D prototype (design reference; do not edit)
   - **Unity.** When no Red homes or villagers are left, `rival.united` is set and their buildings become ours. `popCount` and the goal count only our tribe, and converts count once they've joined.
   - **Look.** Red villagers wear terracotta (`TRIBE_RED`). Every home carries a pennant: ours blue, theirs red, blending to blue with belief. The HUD's "Red tribe" row shows their number and jumps the camera there, which meets the "Neighbours" quest.
   - **Quests.** "Neighbours", "A warm welcome" and "One people" (chain version 3).
+  - **Borders** (phase 11). `influenceSources(S, tribe)` defines each tribe's land, and `inInfluence` and `influenceField` both read it.
+    - `influenceField` is r − d per vertex. Its 0 contour, traced by marching squares in `render/contour.ts`, is exactly where `inInfluence` changes; a test checks this.
+    - `render/border.ts` re-traces a tribe only when its sources change (checked twice a second) and lays out segments within 70 units of the focus. Ours is blue, theirs red.
+    - `B` toggles both, saved as `hearthvale-border`.
+  - **Red festivals** (phase 11). About every 300 s (±20%) they celebrate for 35 s.
+    - Their homes grow ×1.5. Bunting and lanterns go up in their colours, and notes rise from their people.
+    - Our blessings, festivals and pet impress them ×2 meanwhile (`rivalFestJoy`). The HUD row reads "Red festival!".
+  - **Red shrine** (phase 11). At 40 people their elder builds a shrine (tribe 1, self-builds) within 6 tiles of their Hearth.
+    - Red homes within 8 tiles of it lose 0.12 belief a second more.
+    - Its crystal glows warm red. The pet's Build trick ignores Red sites, and Red buildings finish without a toast.
+  - **Mood.** `rivalMood(S, home)` puts one line of advice in a Red home's tooltip: celebrating, pet mischief, no homes nearby, homes too small, no Shrine nearby, loyal core, or warming.
   - **Balance probe.** 500 people around day 8 and 1000 around day 12–13. The Red tribe caps at 160 by day 3, and a player who just expands wins them over around days 20–27. The probe's scripted player only acts for our tribe.
 - **Our tribe is blue (user's choice).** Villagers wear tribe-blue clothing, from the prototype's `TRIBE` blues (#3f6fc4, #3566b0, #4a7fd6, #2f5ea8). Jobs show as accents on top of the blue: farmer straw hat, forester green cap, fisher teal hat, builder orange headband and tool, priest white robe trim with a feather headdress. That way the whole tribe reads as one blue people from afar, and jobs are still clear up close. Blue also tints tribe flags and festival bunting. A future rival tribe gets a different colour.
 
@@ -174,5 +188,3 @@ legacy/       the 2D prototype (design reference; do not edit)
 ## Ideas queued
 - Local AI-generated music or voices for the pet, made offline with free tools and shipped as our own assets. Parked by the user ("skip for now"). Their PC has an AMD Radeon RX 7900 XTX (24 GB), so prefer tools that run on AMD (ROCm on Linux/WSL, or DirectML/ONNX on Windows) over CUDA-only ones.
 - Move the `balance.ts` tunables to JSON for tuning without code.
-- Draw our influence border on the ground (Black & White style), so it's clear where Red villagers can be picked up and won over.
-- Red tribe life: their own little festivals, a Red shrine, and a mood line in the tooltip that says what would impress them most.
