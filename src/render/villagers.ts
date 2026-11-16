@@ -30,8 +30,13 @@ export interface Figure {
   z: number;
   /** Explicit height (held/flying); otherwise stands on the ground. */
   y?: number;
-  pose?: 'held';
+  pose?: 'held' | 'fly';
+  /** Body rotation while flying (physics); the figure tumbles about its middle. */
+  q?: { x: number; y: number; z: number; w: number };
 }
+
+/** Height of a flying villager's tumbling centre above their feet (matches the physics capsule). */
+const FLY_CENTRE = 0.25;
 
 function pivoted(g: BufferGeometry, dy: number): BufferGeometry {
   g.translate(0, dy, 0);
@@ -160,7 +165,7 @@ export class Villagers {
       const wet = f.y === undefined && isWater(S, Math.floor(f.x), Math.floor(f.z));
       const ground = surfaceY(S, f.x, f.z);
       const ph = time * 9 + v.id * 1.7;
-      const held = f.pose === 'held';
+      const held = f.pose === 'held' || f.pose === 'fly';
       const walking = v.mv && !held && !wet;
       const sit = !held && !wet && (v.st === 'sit' || v.st === 'rest') && !v.mv;
       const work = v.st === 'work' && !held;
@@ -169,15 +174,20 @@ export class Villagers {
       if (sit) y -= 0.12;
       const yaw = held ? time * 0.6 : Math.PI / 2 - v.face;
       const wob = v.dizzy > 0.4 ? Math.sin(time * 10 + v.id) * 0.25 : 0;
-      q4.setFromAxisAngle(Y, yaw);
-      if (wob) q4.multiply(qa.setFromAxisAngle(Z, wob));
-      if (held) q4.multiply(qa.setFromAxisAngle(X, Math.sin(time * 6) * 0.25));
-      B.compose(v3.set(wx, y, wz), q4, one);
+      if (f.q) {
+        // tumbling through the air: rotate about the body's middle
+        B.compose(v3.set(wx, y, wz), q4.set(f.q.x, f.q.y, f.q.z, f.q.w), one).multiply(L.makeTranslation(0, -FLY_CENTRE, 0));
+      } else {
+        q4.setFromAxisAngle(Y, yaw);
+        if (wob) q4.multiply(qa.setFromAxisAngle(Z, wob));
+        if (held) q4.multiply(qa.setFromAxisAngle(X, Math.sin(time * 6) * 0.25));
+        B.compose(v3.set(wx, y, wz), q4, one);
+      }
       this.drawn.push({ v, p: new Vector3(wx, y + 0.3 - bendDrop(wx, wz), wz) });
 
       const skin = SKIN[v.sk % 4]!, blue = BLUE[v.c % 4]!;
       // legs
-      const swing = walking ? Math.sin(ph) * 0.7 : held ? Math.sin(time * 8 + v.id) * 0.5 : sit ? -1.4 : 0;
+      const swing = walking ? Math.sin(ph) * 0.7 : f.pose === 'fly' ? Math.sin(time * 14 + v.id) * 0.8 : held ? Math.sin(time * 8 + v.id) * 0.5 : sit ? -1.4 : 0;
       for (const side of [-1, 1]) {
         L.compose(v3.set(side * 0.048, 0.17, 0), qa.setFromAxisAngle(X, sit ? swing : swing * side), one).premultiply(B);
         this.legs.setMatrixAt(n * 2 + (side > 0 ? 1 : 0), L);
@@ -199,7 +209,8 @@ export class Villagers {
       // arms: walk swing, work chop, wave, paddle, or up in the air when held
       for (const side of [-1, 1]) {
         let ax = walking ? -Math.sin(ph) * 0.6 * side : 0, az = 0;
-        if (held) ax = -2.8 + Math.sin(time * 7 + side) * 0.3;
+        if (f.pose === 'fly') ax = -2.6 + Math.sin(time * 16 + side * 2) * 0.7;
+        else if (held) ax = -2.8 + Math.sin(time * 7 + side) * 0.3;
         else if (wet) ax = -1.2 + Math.sin(ph * 0.8 + side * 1.6) * 0.8;
         else if (work && side > 0) ax = v.role === 'priest' ? -2.6 : v.role === 'fisher' ? -0.9 : -1.2 - Math.abs(Math.sin(time * 5 + v.id)) * 1.4;
         else if (work && v.role === 'priest') ax = -2.6;

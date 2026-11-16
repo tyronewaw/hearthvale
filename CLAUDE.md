@@ -3,7 +3,7 @@
 A cosy 3D god game for the browser, on desktop and phone. It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees) and phase 3 (huts, villagers, growth, economy, building, a simple grab-and-drop hand, saves). Next: phase 4 (the 3D god hand with Rapier physics throws).
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves) and phase 4 (the 3D god hand with Rapier physics throws). Next: phase 5 (the god pet).
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
@@ -49,11 +49,16 @@ src/render/   three.js only, and it reads sim state
   villagers.ts per-part instanced villagers (blue tribe), procedural walk/work/wave/sit/swim/held,
               blob shadows, culled to the view, screen-space pick()
   particles.ts pooled particles: lit (smoke, puffs, leaves, splashes) and glowing (sparks, hearts…)
+  hand.ts     the god hand: code-built right hand, jointed fingers, blended poses
+              (open, reach, point, grip, hold, stroke, slap), leans with motion, casts a shadow
   scale.ts    sim→world mapping: STEP per level, SEA_FLOOR, WATER_Y, surfaceY/standY
   camera-rig.ts orbit camera around a wrapped focus; zoom also tilts and strengthens the bend
   terrain-mesh.ts 8×8 chunks of 16×16 tiles, flat-shaded with per-triangle colour, seasonal palettes
   renderer.ts owns the scene; routes sim events to terrain, water and flora; hover marker
-src/input/    controls.ts (pointer, wheel, pinch, twist, keys, hold-to-repeat), picking.ts
+src/physics/  physics.ts  Rapier world: 64 chunk heightfields on the torus, thrown bodies, buoyancy, settle
+  throw.ts    throwVelocity() from the hand's trail; trimTrail()
+  ballistic.ts simple arc used before Rapier's WASM loads (and in tests)
+src/input/    controls.ts (pointer, wheel, pinch, twist, keys, hold-to-repeat, carry), picking.ts
 src/ui/       hud.ts (HUD, toolbar, toasts, modals), icons.ts (prototype pixel icons), styles.css
 src/main.ts   bootstrap, fixed-tick loop with speed ×1/2/4, event routing, window.__hv debug hook
 scripts/smoke.mjs  Playwright smoke test
@@ -79,8 +84,22 @@ legacy/       the 2D prototype (design reference; do not edit)
 - **Hunger slows growth to a 10% floor** (`BALANCE.hungerFloor`). The prototype stopped growth entirely at 0 food; the cosy rule says hunger only slows it. **The goal is 1000 villagers** (the prototype's 500 ×2 for four times the land). The balance probe reaches 500 around day 9 and 1000 around day 14.
 - **Villagers render cheaply.** Each body part is one InstancedMesh, so about 20 draw calls for everyone. Only villagers within the view radius are drawn, nearest first, up to 900 (500 on low). They get blob shadows instead of shadow casting. Positions interpolate between ticks (`px`/`py` → `x`/`y`, wrap-aware).
 - **Buildings** are merged vertex-coloured models with one InstancedMesh per model. They're re-laid out every frame (cheap: hundreds of instances). Sites under construction grow from the ground (scale.y = prog) inside scaffolding.
-- **The hand (phase 3 version)** picks villagers, trees and rocks in screen space from their drawn positions, not from the ground behind them. It carries them under the pointer and drops them where you let go. Phase 4 replaces this with the 3D hand and physics throws (`Sim.release`/`landed` are ready for it).
-- **Budgets (smoke test, 1280×800, village of about 90 people):** high 116 draw calls and ~430k triangles; medium and low 96 calls and ~250k.
+- **The hand** picks villagers, trees and rocks in screen space from their drawn positions, not from the ground behind them. Held things hang from its grip point.
+  - Pose by context: open when idle, reach when over something grabbable, point for the other tools, grip (lowered, fist) while you pan the world, hold while carrying.
+  - It keeps a steady size on screen (scale ≈ 0.11 × camera distance), like a cursor, and the OS cursor is hidden over the world.
+- **Throws.**
+  - Letting go calls `release()`: the held thing moves to `S.flying`, which counts towards the population and is saved back at its pickup spot.
+  - Physics launches it with `throwVelocity()` of the hand's grip trail over the last 140 ms. That's capped at 16 u/s, a throw only above 2.5 u/s, with lift 2.5 + 0.3×speed.
+  - The trail always keeps its last three samples, and a slow frame just before letting go falls back to the last pre-hitch velocity, so a hitch can't turn a throw into a drop.
+  - When the body settles (slow for 0.3 s, or after 8 s), physics calls `sim.landed()`, which runs the prototype's land rules.
+- **Physics on the torus.**
+  - Rapier isn't periodic. There are 64 heightfield colliders (CHUNK×CHUNK cells, 17×17 samples, column-major with rows along z, centred on the collider), each placed at its nearest image to an anchor.
+  - The anchor follows the camera focus only while nothing is flying, and terrain events rebuild only the touched chunks.
+  - Rapier loads lazily after the first frame (its WASM is about 2 MB). Until then throws use `ballisticLanding`.
+- **Terrain triangles are split along B–D** ((x+1,z)→(x,z+1)) everywhere: the mesh, `hAt`, `surfaceY` and Rapier. A test checks the Rapier surface equals `surfaceY`.
+- **Water physics.** Bodies below `WATER_Y` get buoyancy and heavy damping, so they bob up. The first contact makes a splash. Villagers who land in water become swimmers and paddle to shore (sim `swimPlan`).
+- **Gravity is 14 u/s²** (1 unit ≈ a villager's height × 2): snappy arcs, not floaty.
+- **Budgets (smoke test, 1280×800, village of about 90 people):** high 116 draw calls and ~430k triangles; medium and low 96 calls and ~250k. The hand adds about 17 draw calls (plus its shadow passes) while it is on screen.
 - **WebGPU is deferred.** The bend uses `onBeforeCompile`, which WebGPURenderer doesn't support (it needs TSL).
 - **Our tribe is blue (user's choice).** Villagers wear tribe-blue clothing, from the prototype's `TRIBE` blues (#3f6fc4, #3566b0, #4a7fd6, #2f5ea8). Jobs show as accents on top of the blue: farmer straw hat, forester green cap, fisher teal hat, builder orange headband and tool, priest white robe trim with a feather headdress. That way the whole tribe reads as one blue people from afar, and jobs are still clear up close. Blue also tints tribe flags and festival bunting. A future rival tribe gets a different colour.
 

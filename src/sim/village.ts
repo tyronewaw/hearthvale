@@ -538,6 +538,7 @@ export function popCount(S: State): number {
   for (const b of S.homes) p += Math.floor(b.pop);
   for (const v of S.vills) if (v.type !== 'resident') p++;
   if (S.held?.k === 'v') p++;
+  for (const f of S.flying) if (f.k === 'v') p++;
   return p;
 }
 

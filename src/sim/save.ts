@@ -23,8 +23,11 @@ function unb64(s: string): Uint8Array {
 export function serialize(S: State): string {
   const vills = S.vills.filter((v) => v.type !== 'resident').slice();
   if (S.held?.k === 'v') vills.push({ ...S.held.v });
-  const { h, tree, flower, rock, held, ...rest } = S;
+  // Anyone mid-air is put back where they were picked up.
+  for (const f of S.flying) if (f.k === 'v') vills.push({ ...f.v, type: f.v.job !== null ? 'worker' : 'settler' });
+  const { h, tree, flower, rock, held, flying, ...rest } = S;
   void held;
+  void flying;
   return JSON.stringify({
     ...rest,
     vills,
@@ -51,6 +54,7 @@ export function deserialize(json: string): State | null {
     if (S.h.length !== N * N || S.tree.length !== N * N) return null;
     S.stat = { ...base.stat, ...(o.stat ?? {}) };
     S.held = null;
+    S.flying = [];
     for (const v of S.vills) {
       v.px = v.x;
       v.py = v.y;

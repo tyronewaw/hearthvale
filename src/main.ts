@@ -13,6 +13,10 @@ import { detectQuality } from './render/quality';
 import { GameRenderer } from './render/renderer';
 import { standY, surfaceY } from './render/scale';
 import { Controls } from './input/controls';
+import { ballisticLanding } from './physics/ballistic';
+import { Physics, VILL_CENTRE } from './physics/physics';
+import { throwVelocity, trimTrail, type TrailPoint } from './physics/throw';
+import type { HandPose } from './render/hand';
 import type { GroundHit } from './input/picking';
 import { Ui } from './ui/hud';
 
@@ -27,6 +31,10 @@ export interface HvDebug {
   /** Advance the simulation by this many in-game seconds immediately. */
   ff(seconds: number): void;
   info(): { calls: number; triangles: number; fps: number; tier: string };
+  physicsReady(): boolean;
+  lastThrow(): unknown;
+  /** Throw whatever the hand holds with a given ground velocity (deterministic, for tests). */
+  throwHeld(vx: number, vz: number): void;
   /** Jump the clock to a time of day (0..1) on the current day, for screenshots. */
   timeOfDay(t: number): void;
   save(): void;
@@ -74,6 +82,14 @@ addEventListener('visibilitychange', () => {
 const canvas = document.getElementById('cv') as HTMLCanvasElement;
 const rig = new CameraRig(sim.S.start[0] + 0.5, sim.S.start[1] + 0.5, innerWidth / innerHeight);
 const R = new GameRenderer(canvas, sim.S, rig, detectQuality());
+/** Rapier loads after the first frame; until then throws use a simple arc. */
+let physics: Physics | null = null;
+/** The hand's recent path (unwrapped world units) while carrying, for throw speed. */
+const trail: TrailPoint[] = [];
+let trailPrev: { x: number; z: number } | null = null, trailU = { x: 0, z: 0 };
+let overGrab = false;
+/** The last release, for debugging throw feel (window.__hv.lastThrow()). */
+let lastThrow: unknown = null, carryFrames = 0, noTarget = 0;
 
 let tool: ToolId = 'hand';
 let bsel: StructKind = 'farm';
@@ -93,6 +109,7 @@ const ui = new Ui({
     sim = Sim.newWorld(newSeed());
     sim.sandbox = sandbox;
     R.setState(sim.S);
+    physics?.setState(sim.S);
     rig.fx = sim.S.start[0] + 0.5;
     rig.fz = sim.S.start[1] + 0.5;
     rig.apply();
@@ -143,14 +160,50 @@ const controls = new Controls(canvas, rig, {
     if (f) return f.k === 'tree' ? sim.grabTree(f.x, f.y) : sim.grabRock(f.x, f.y);
     return false;
   },
-  drop: (hit) => {
-    if (!sim.S.held) return;
-    if (hit) sim.drop(wrap(hit.x), wrap(hit.z), false);
-    else sim.drop(rig.fx, rig.fz, false);
-  },
+  drop: () => release(),
   togglePause,
   toggleHelp: () => ui.toggleHelp(),
 });
+
+/** Let go of what the hand holds: a throw if the hand was moving fast, a drop otherwise. */
+function release(): void {
+  const held = sim.S.held;
+  if (!held) return;
+  const now = performance.now(), v = throwVelocity(trail, now);
+  lastThrow = { trail: trail.map((p) => ({ ...p, t: p.t - now })), ...v, carryFrames, noTarget };
+  carryFrames = noTarget = 0;
+  trail.length = 0;
+  const g = R.hand.grip, x = wrap(g.x), z = wrap(g.z);
+  const y = held.k === 'v' ? g.y - 0.52 + VILL_CENTRE : held.k === 'tree' ? g.y - 0.95 : g.y - 0.22;
+  const obj = sim.release()!;
+  if (physics) physics.launch(obj, x, y, z, v.vx, v.vy, v.vz, v.thrown, 1);
+  else {
+    const l = ballisticLanding(sim.S, x, y, z, v.vx, v.vy, v.vz, v.thrown);
+    sim.landed(obj, l.x, l.z, v.thrown);
+  }
+  if (v.thrown) sim.emit({ k: 'sfx', id: 'throw' });
+}
+
+/** Where the hand hovers and how it's posed, from what the player is doing. */
+function handState(): { target: Vector3 | null; pose: HandPose } {
+  const hit = controls.hover;
+  if (!hit || !controls.pointer) return { target: null, pose: 'open' };
+  let h = 1.45, pose: HandPose = 'open';
+  if (controls.carrying) {
+    h = 1.3;
+    pose = 'hold';
+  } else if (controls.dragging) {
+    h = 0.35;
+    pose = 'grip';
+  } else if (tool !== 'hand') {
+    h = 1.0;
+    pose = 'point';
+  } else if (overGrab) {
+    h = 0.85;
+    pose = 'reach';
+  }
+  return { target: new Vector3(hit.x, standY(sim.S, wrap(hit.x), wrap(hit.z)) + h, hit.z), pose };
+}
 
 function redrawBar(): void {
   ui.drawBar(tool, bsel, sandbox ? 1e9 : sim.S.best);
@@ -177,9 +230,11 @@ if (!params.has('nohelp') && !booted.loaded) ui.toggleHelp(true);
 /** Tooltip for whatever is under the pointer (the prototype's hover()). */
 function tooltip(): string | null {
   const ptr = controls.pointer, hit = controls.hover, S = sim.S;
+  overGrab = false;
   if (!ptr || controls.dragging || controls.carrying) return null;
   if (tool === 'hand') {
     const p = ndc(ptr.x, ptr.y), v = R.villagers.pick(rig.camera, p.x, p.y, p.w, p.h, 16);
+    overGrab = !!v || !!pickFlora(ptr.x, ptr.y, hit);
     if (v) {
       const what = v.role === 'settler' ? (v.type === 'resident' ? 'Villager at home' : 'Wanderer') : ROLE_NAME[v.role][0]!.toUpperCase() + ROLE_NAME[v.role].slice(1);
       return `<b>${what}</b><br>Grab to carry. Drop on a building to give a job.`;
@@ -224,7 +279,17 @@ function frame(now: number): void {
     }
     if (n === 8) acc = 0;
   }
+  // Physics: things in the air fly, then come to rest and are handed back to the sim.
+  if (physics && !paused) {
+    for (const l of physics.step(rdt * speed, rig.fx, rig.fz)) sim.landed(l.obj, l.x, l.z, l.thrown);
+    for (const sp of physics.splashes) {
+      R.splash(sp.x, sp.z);
+      sim.emit({ k: 'sfx', id: 'splash' });
+    }
+    physics.splashes.length = 0;
+  }
   for (const e of sim.drain()) {
+    if (e.k === 'terrain') physics?.terrainChanged(e.tiles);
     R.onEvent(e);
     if (e.k === 'toast') ui.toast(e.msg);
     else if (e.k === 'ui') redrawBar();
@@ -232,14 +297,29 @@ function frame(now: number): void {
 
   controls.frame(rdt, now);
   rig.update(rdt, standY(sim.S, rig.fx, rig.fz));
-  canvas.className = tool === 'hand' ? (controls.dragging || controls.carrying ? 'grabbing' : 'grab') : 'aim';
+  const hs = handState();
+  canvas.className = hs.target ? 'nocursor' : tool === 'hand' ? 'grab' : 'aim';
+  if (controls.carrying) {
+    carryFrames++;
+    if (!hs.target) noTarget++;
+  }
+  if (controls.carrying && hs.target) {
+    const g = R.hand.grip, cur = { x: wrap(g.x), z: wrap(g.z) };
+    if (trailPrev) {
+      trailU.x += wd(trailPrev.x, cur.x);
+      trailU.z += wd(trailPrev.z, cur.z);
+    }
+    trailPrev = cur;
+    trail.push({ t: now, x: trailU.x, y: g.y, z: trailU.z });
+    trimTrail(trail, now);
+  } else trailPrev = null;
   const hover = controls.dragging ? null : controls.hover;
   const ghost = tool === 'build' && hover
     ? { kind: bsel, tile: [hover.tx, hover.tz] as [number, number], ok: validSite(sim, bsel, hover.tx, hover.tz) && (sandbox || sim.S.wood >= STRUCTS[bsel].wood) }
     : null;
   R.render(now / 1000, {
     dt: rdt, alpha: paused ? 1 : Math.min(1, acc / TICK), hover, tool, crops: sim.crops, ghost,
-    hand: hover ? { x: wrap(hover.x), z: wrap(hover.z) } : null,
+    handTarget: hs.target, handPose: hs.pose, flyers: physics?.poses() ?? [],
   });
   ui.hud(sim.S, rdt);
   if ((tipT -= rdt) <= 0) {
@@ -275,6 +355,16 @@ window.__hv = {
     S.t = Math.floor(S.t / DAY) * DAY + t * DAY;
   },
   save,
+  physicsReady: () => !!physics,
+  lastThrow: () => lastThrow,
+  throwHeld: (vx, vz) => {
+    const held = sim.S.held;
+    if (!held) return;
+    const g = R.hand.grip, obj = sim.release()!, sp = Math.hypot(vx, vz);
+    const y = held.k === 'v' ? g.y - 0.52 + VILL_CENTRE : g.y - 0.5;
+    if (physics) physics.launch(obj, wrap(g.x), y, wrap(g.z), vx, 2.5 + sp * 0.3, vz, true, 1);
+    else sim.landed(obj, wrap(g.x + vx), wrap(g.z + vz), true);
+  },
 };
 
 requestAnimationFrame((t) => {
@@ -282,4 +372,8 @@ requestAnimationFrame((t) => {
   frame(t);
   ui.loaded();
   window.__hv.ready = true;
+  // Rapier's WASM is about 2 MB, so load it after the world is on screen.
+  Physics.load(sim.S).then((p) => {
+    physics = p;
+  }).catch((e) => console.warn('Physics unavailable, using simple arcs', e));
 });

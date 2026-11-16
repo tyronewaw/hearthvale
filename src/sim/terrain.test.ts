@@ -125,13 +125,15 @@ describe('level and rise', () => {
 });
 
 describe('hAt', () => {
-  it('matches corner heights and interpolates on the render triangles', () => {
+  it('matches corner heights and interpolates on the render/physics triangles', () => {
     const S = flatWorld(0);
     S.h[idx(1, 0)] = 1;
     expect(hAt(S, 0, 0)).toBe(0);
     expect(hAt(S, 1, 0)).toBe(1);
     expect(hAt(S, 0.5, 0)).toBeCloseTo(0.5);
-    expect(hAt(S, 0.75, 0.25)).toBeCloseTo(0.5); // on the (x,y)→(x+1,y+1) triangle
+    expect(hAt(S, 0.75, 0.25)).toBeCloseTo(0.75); // on the A-B-D triangle (split along B–D)
+    expect(hAt(S, 0.75, 0.75)).toBeCloseTo(0.25); // on the B-C-D triangle: only B is raised
+    expect(hAt(S, 0.25, 0.25)).toBeCloseTo(0.25);
     expect(hAt(S, N + 1, 0)).toBe(1); // wraps
   });
 });

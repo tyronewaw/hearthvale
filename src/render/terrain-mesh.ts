@@ -137,8 +137,10 @@ export class TerrainMesh {
         h[1] = H[idx(tx + 1, tz)]!;
         h[2] = H[idx(tx + 1, tz + 1)]!;
         h[3] = H[idx(tx, tz + 1)]!;
-        tri(x, z, h, [0, 2, 1], 0); // counter-clockwise seen from above
-        tri(x, z, h, [0, 3, 2], 1);
+        // Split along B–D, (x+1,z)→(x,z+1), the same diagonal Rapier's heightfield uses,
+        // so physics bodies rest exactly on the drawn surface. Counter-clockwise from above.
+        tri(x, z, h, [0, 3, 1], 0);
+        tri(x, z, h, [1, 3, 2], 1);
       }
     pos.needsUpdate = nor.needsUpdate = col.needsUpdate = true;
     g.computeBoundingSphere();

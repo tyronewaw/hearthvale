@@ -41,3 +41,21 @@ describe('save / load', () => {
     expect(deserialize(JSON.stringify({ v: 2, h: [] }))).toBeNull();
   });
 });
+
+describe('flying villagers', () => {
+  it('count towards the population while airborne, and are kept by a save', () => {
+    const sim = Sim.newWorld(5);
+    const v = sim.S.vills[0]!;
+    const pop = sim.S.vills.length;
+    sim.grab(v.id);
+    const obj = sim.release()!;
+    expect(sim.S.flying).toHaveLength(1);
+    sim.tick();
+    expect(sim.S.popNow).toBe(pop);
+    const S2 = deserialize(serialize(sim.S))!;
+    expect(S2.vills.some((o) => o.id === v.id)).toBe(true);
+    sim.landed(obj, 10, 10, true);
+    expect(sim.S.flying).toHaveLength(0);
+    expect(sim.S.vills.includes(v)).toBe(true);
+  });
+});

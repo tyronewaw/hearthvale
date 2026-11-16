@@ -40,6 +40,7 @@ export function emptyState(seed: number): State {
     structs: [],
     vills: [],
     held: null,
+    flying: [],
     totem: null,
     best: 0,
     maxLv: -1,
