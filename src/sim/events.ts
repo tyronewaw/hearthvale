@@ -16,4 +16,9 @@ export type SimEvent =
   /** Something must fly (the monkey flinging a villager): physics or an arc takes it. */
   | { k: 'launch'; obj: Held; x: number; z: number; vx: number; vz: number }
   /** The last quest is done. */
-  | { k: 'win'; pop: number; day: number };
+  | { k: 'win'; pop: number; day: number }
+  /**
+   * A villager says something (a key in audio/voice-lines.json without its _n, e.g. 'throw'),
+   * at tile position (x, y). `who` is the speaker's villager id (0 for a crowd) for pitch.
+   */
+  | { k: 'voice'; id: string; x: number; y: number; who: number };

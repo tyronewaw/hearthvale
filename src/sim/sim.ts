@@ -11,7 +11,7 @@ import { Rng } from './rng';
 import { festivalImpress, fixTribes, spawnRival, stepRival } from './rival';
 import { bump, isWater, level, rise } from './terrain';
 import {
-  blueHomes, builtPen, calcCrops, centreX, centreY, sizeOf, destroyHome, grabFlora, grabVillager, impress, land, mkV, placeStruct, popCount, rebuildMap, recheck,
+  blueHomes, builtPen, calcCrops, centreX, centreY, sizeOf, voice, destroyHome, grabFlora, grabVillager, impress, land, mkV, placeStruct, popCount, rebuildMap, recheck,
   roleCount, spark, stepV, syncResidents, tribePop, validSite, finish, type Ctx,
 } from './village';
 import { generateWorld } from './worldgen';
@@ -242,6 +242,8 @@ export class Sim implements Ctx, PetCtx {
       else {
         festival(this);
         this.emit({ k: 'toast', msg: 'Festival! Every home grows twice as fast' });
+        const H = this.S.structs.find((s) => s.k === 'hearth' && s.tribe === 0);
+        if (H) voice(this, 'festival', centreX(H), centreY(H));
       }
       // blessings near the Red tribe impress them
       if (id === 'fest') festivalImpress(this);

@@ -38,7 +38,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,woff,woff2,png,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,woff,woff2,png,webmanifest,ogg}'],
         // Rapier's WASM is inlined in its JS chunk (~2 MB), so allow big files in the precache.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         // /legacy/ is its own page, not the 3D game's fallback.

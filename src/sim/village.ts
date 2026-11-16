@@ -27,6 +27,8 @@ export interface Ctx {
 const toast = (c: Ctx, msg: string) => c.emit({ k: 'toast', msg });
 const sfx = (c: Ctx, id: string) => c.emit({ k: 'sfx', id });
 export const spark = (c: Ctx, x: number, y: number, kind: SparkKind, n: number) => c.emit({ k: 'spark', x, y, kind, n });
+/** A villager (or a crowd, who = 0) says a line; see audio/voice-lines.json. */
+export const voice = (c: Ctx, id: string, x: number, y: number, who = 0) => c.emit({ k: 'voice', id, x, y, who });
 
 // ---------------------------------------------------------------- lookups
 
@@ -178,6 +180,7 @@ export function newHome(c: Ctx, x: number, y: number, pop: number, tribe: Tribe 
     if (lv > S.maxLv) S.maxLv = lv;
     if (blueHomes(S) === 1) toast(c, 'Your first home!');
     sfx(c, 'settle');
+    voice(c, 'newhome', x + 0.5, y + 0.5);
   }
   return b;
 }
@@ -216,6 +219,7 @@ export function recheck(c: Ctx): void {
     if (l !== b.lv) {
       if (l > b.lv && b.tribe === 0) {
         sfx(c, 'build');
+        voice(c, 'grow', b.x + 0.5, b.y + 0.5);
         if (l > S.maxLv) {
           S.maxLv = l;
           if (l > 0) toast(c, 'Your first ' + BN[l]!.toLowerCase() + '!');
@@ -671,6 +675,7 @@ export function grabVillager(c: Ctx, v: Vill): boolean {
   v.dizzy = 0;
   S.held = { k: 'v', v };
   sfx(c, 'grab');
+  voice(c, v.tribe === 1 ? 'red_pickup' : 'pickup', v.x, v.y, v.id);
   return true;
 }
 
@@ -736,7 +741,10 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
     spark(c, x, y, 'star', 1);
   } else if (!quiet) S.stat.drops++;
   sfx(c, 'land');
-  if (isWater(S, tx, ty)) spark(c, x, y, 'splash', 6);
+  if (isWater(S, tx, ty)) {
+    spark(c, x, y, 'splash', 6);
+    voice(c, 'splash', x, y, v.id);
+  } else voice(c, thrown ? 'land' : 'drop', x, y, v.id);
   // a Red villager put down inside our land joins us
   if (v.tribe === 1) {
     if (inInfluence(S, x, y)) convertVill(c, v);
@@ -757,6 +765,7 @@ export function land(c: Ctx, obj: { k: 'v'; v: Vill } | { k: 'tree'; tree: numbe
       v.dizzy = Math.min(v.dizzy, 0.5);
       toast(c, `Now a ${ROLE_NAME[def.role]}`);
       sfx(c, 'settle');
+      voice(c, 'job', x, y, v.id);
       spark(c, x, y, 'spark', 4);
     } else toast(c, `${def.name} is full (${def.cap} workers)`);
   } else {
@@ -813,6 +822,7 @@ export function convertVill(c: Ctx, v: Vill): void {
   if (c.S.rival) c.S.rival.joined++;
   spark(c, v.x, v.y, 'heart', 3);
   sfx(c, 'settle');
+  voice(c, 'red_join', v.x, v.y, v.id);
   toast(c, 'A Red villager joined your tribe');
 }
 
@@ -828,6 +838,7 @@ export function convertHome(c: Ctx, b: Home): void {
   if (b.lv > S.maxLv) S.maxLv = b.lv;
   spark(c, b.x + 0.5, b.y + 0.5, 'heart', 8);
   sfx(c, 'magic');
+  voice(c, 'red_join', b.x + 0.5, b.y + 0.5, b.id);
   toast(c, `A Red ${BN[b.lv]!.toLowerCase()} joined your tribe (+${n})`);
   c.emit({ k: 'ui' });
 }

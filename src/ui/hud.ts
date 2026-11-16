@@ -16,6 +16,7 @@ export interface UiHandlers {
   /** The welcome screen was dismissed (a new player chooses their pet next). */
   helpClosed(): void;
   toggleSound(): boolean;
+  toggleVoices(): boolean;
   /** Look at the Red tribe's village. */
   findRival(): void;
 }
@@ -35,6 +36,7 @@ export class Ui {
     };
     $('bHelp').onclick = () => this.toggleHelp(true);
     $('bSound').onclick = () => this.setSound(this.h.toggleSound());
+    $('bVoices').onclick = () => this.setVoices(this.h.toggleVoices(), true);
     $('bKeep').onclick = () => $('win').classList.remove('show');
     $('hrr').onclick = () => this.h.findRival();
     // Offer to install the game as an app when the browser allows it (Chrome/Edge on desktop).
@@ -76,6 +78,12 @@ export class Ui {
 
   toggleHelp(show?: boolean): void {
     $('help').classList.toggle('show', show);
+  }
+
+  /** The Voices button only shows once the game has recorded voices. */
+  setVoices(on: boolean, available: boolean): void {
+    $('bVoices').hidden = !available;
+    $('bVoices').textContent = on ? 'Voices on' : 'Voices off';
   }
 
   setSound(on: boolean): void {
