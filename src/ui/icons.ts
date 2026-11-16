@@ -38,7 +38,26 @@ function spr(rows: string[], pal: Record<string, string>): HTMLCanvasElement {
   return c;
 }
 
+/** Building icons for the build sub-menu (same pixel style). */
+const STRUCT_ROWS: Record<string, string[]> = {
+  hearth: ['.....y......', '....yry.....', '...yrrry....', '...rrrrr....', '..s.bbb.s...', '.s.......s..', 's..TTTT...s.', '.s.......s..', '..s.....s...', '...sssss....'],
+  farm: ['.....tt.....', '....tttt....', '...tttttt...', '...bbkbb....', 'GgGgGgGgGgGg', 'bbbbbbbbbbbb', 'GgGgGgGgGgGg', 'bbbbbbbbbbbb', 'GgGgGgGgGgGg', 'bbbbbbbbbbbb'],
+  lumber: ['............', '.tttttttttt.', 'ttttttttttTT', '.b........b.', '.b..TTTT..b.', '.b.TTTTTT.b.', '.bTTTTTTTTb.', '............', 'gggggggggggg', '............'],
+  fish: ['....tttt....', '...tttttt...', '..tttttttt..', '...bbkbb....', '...bbkbb....', '.b.b..b.b...', 'uuuuuuuuuuuu', 'uUuu.ww.uUuu', 'uuu.wwww.uuu', 'uuuuuuuuuuuu'],
+  shrine: ['.....U......', '....UuU.....', '...UuuuU....', '....UuU.....', '.....U......', 's.........s.', 's.s.....s.s.', 's.s.sss.s.s.', 'ssssssssssss', '............'],
+};
+
 const cache: Record<string, string> = {};
+/** Data URL for a building icon. */
+export function structIcon(k: string): string {
+  const key = 'struct-' + k;
+  if (!cache[key]) {
+    const rows = STRUCT_ROWS[k];
+    cache[key] = rows ? spr(rows, IP).toDataURL() : '';
+  }
+  return cache[key]!;
+}
+
 /** Data URL for a tool icon. */
 export function icon(id: string): string {
   if (!cache[id]) {

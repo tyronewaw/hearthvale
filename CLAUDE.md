@@ -3,13 +3,15 @@
 A cosy 3D god game for the browser, on desktop and phone. It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Phase 1 (curved wrap-around terrain and land editing) and phase 2 (water, sky, day/night, seasons, shadows, trees) are done. Next: phase 3 (huts, villagers, growth and economy).
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees) and phase 3 (huts, villagers, growth, economy, building, a simple grab-and-drop hand, saves). Next: phase 4 (the 3D god hand with Rapier physics throws).
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
 - `npm run check` runs `tsc --noEmit` and Vitest. It must be green before every commit.
 - `npm run build` builds into `dist/`, with the legacy page at `dist/legacy/`.
 - `npm run smoke` builds, serves, and plays in headless Chromium through `window.__hv`. It fails on any console error and saves screenshots to `shots/` (gitignored).
+- `npm run balance` runs a headless scripted player for `DAYS` (default 30) and writes a day-by-day table to `shots/balance.txt`. It takes about 3 s.
+- Add `?fresh` to start a new world instead of loading the save, and `?nosave` to stop autosaving.
 
 ## Stack
 Vite 8, TypeScript 7 (strict), three 0.187 (WebGL2), @dimforge/rapier3d-compat 0.21 (from phase 4), Vitest 5. Pixelify Sans is self-hosted through @fontsource. There is no UI framework: the overlay is plain DOM.
@@ -22,9 +24,16 @@ src/sim/      pure game rules. No three, DOM, Math.random or imports from other 
   rng.ts      seeded xorshift Rng and hash2. All randomness goes through sim.rng.
   terrain.ts  tileFlat, isWater, hAt, cascade, bump, setVertices, level, rise, slopeOk
   worldgen.ts tileable archipelago generator, landmasses, start site
-  balance.ts  tunable numbers ("proto" values from the prototype, "×4" scaled for 128²)
+  defs.ts     BN/BMAX/BTH home sizes, ROLES, STRUCTS, TOOLS (ported constants)
+  balance.ts  every tunable number ("proto" = the prototype's, "×N" = scaled for 128²)
+  events.ts   SimEvent union (terrain, flora, season, toast, sfx, spark, ui)
   flora.ts    tree spread (treeCanGrow, spreadTrees)
-  sim.ts      Sim class: tick() at 10 Hz, useTool(), events queue (drain() each frame)
+  village.ts  the prototype's village rules on the torus: fields, levelFor, recheck, findSpot,
+              settlers/residents/workers/builders, production, syncResidents, popCount,
+              validSite/placeStruct, the hand's grab/land rules. Works on a Ctx (the Sim).
+  save.ts     serialize/deserialize (localStorage hearthvale-v3; maps as base64)
+  sim.ts      Sim class: tick() = the prototype's update(); commands useTool, build, grab,
+              grabTree/Rock, drop, release/landed; events queue (drain() each frame)
 src/render/   three.js only, and it reads sim state
   bend.ts     planet-curve vertex shader patch (`bent(material)`) and JS `bendDrop`
   materials.ts worldMat() = CSM hookup + bend, extendShader(), castsShadow() (bent depth material)
@@ -33,6 +42,13 @@ src/render/   three.js only, and it reads sim state
   water.ts    stylised sea: shore-distance texture (BFS from land, RepeatWrapping) → shallows, foam, sparkle
   flora.ts    instanced trees (3 kinds, canopy + trunk), flowers, rocks; seasonal colours
   clouds.ts   drifting instanced clouds that cast shadows
+  kit.ts      model kit: primitives + per-face colours → one merged vertex-coloured geometry
+  models.ts   huts (6 home levels), Hearth, Farm, Lumber camp, Fishing hut, Shrine, scaffold, totem
+  buildings.ts instanced buildings + scaffolds, door glow, night light pools, hearth fire and
+              point light, shrine crystals, crops, totem, build ghost, chimney smoke
+  villagers.ts per-part instanced villagers (blue tribe), procedural walk/work/wave/sit/swim/held,
+              blob shadows, culled to the view, screen-space pick()
+  particles.ts pooled particles: lit (smoke, puffs, leaves, splashes) and glowing (sparks, hearts…)
   scale.ts    sim→world mapping: STEP per level, SEA_FLOOR, WATER_Y, surfaceY/standY
   camera-rig.ts orbit camera around a wrapped focus; zoom also tilts and strengthens the bend
   terrain-mesh.ts 8×8 chunks of 16×16 tiles, flat-shaded with per-triangle colour, seasonal palettes
@@ -59,7 +75,12 @@ legacy/       the 2D prototype (design reference; do not edit)
 - **Instanced flora layout.** Instances use their chunk's nearest image (the same rule as the terrain). They are only re-laid out when that layout changes (the focus crosses a line at 8 + 16k), the flora changes, or the season turns.
 - **Hashes are unsigned.** `hash2` returns a uint32, so always shift it with `>>>`, never `>>`. A signed shift makes negative indices into palette arrays.
 - **Day/night timing** follows the prototype: night before 0.2 and after 0.81 (`nightF`). The sun rises at 0.245 and sets at 0.765, and its light fades to zero at the horizon, so the swap to the moon is invisible.
-- **Budgets (smoke test, 1280×800):** high 99 draw calls and ~420k triangles (the CSM passes redraw the trees); medium and low 83 calls and ~240k.
+- **Entity references are ids.** `Vill.job` and `Vill.home` hold ids, which keeps saves plain. The tile→building map (`bmap`) and the crop set are derived in the Sim, not saved.
+- **Hunger slows growth to a 10% floor** (`BALANCE.hungerFloor`). The prototype stopped growth entirely at 0 food; the cosy rule says hunger only slows it. **The goal is 1000 villagers** (the prototype's 500 ×2 for four times the land). The balance probe reaches 500 around day 9 and 1000 around day 14.
+- **Villagers render cheaply.** Each body part is one InstancedMesh, so about 20 draw calls for everyone. Only villagers within the view radius are drawn, nearest first, up to 900 (500 on low). They get blob shadows instead of shadow casting. Positions interpolate between ticks (`px`/`py` → `x`/`y`, wrap-aware).
+- **Buildings** are merged vertex-coloured models with one InstancedMesh per model. They're re-laid out every frame (cheap: hundreds of instances). Sites under construction grow from the ground (scale.y = prog) inside scaffolding.
+- **The hand (phase 3 version)** picks villagers, trees and rocks in screen space from their drawn positions, not from the ground behind them. It carries them under the pointer and drops them where you let go. Phase 4 replaces this with the 3D hand and physics throws (`Sim.release`/`landed` are ready for it).
+- **Budgets (smoke test, 1280×800, village of about 90 people):** high 116 draw calls and ~430k triangles; medium and low 96 calls and ~250k.
 - **WebGPU is deferred.** The bend uses `onBeforeCompile`, which WebGPURenderer doesn't support (it needs TSL).
 - **Our tribe is blue (user's choice).** Villagers wear tribe-blue clothing, from the prototype's `TRIBE` blues (#3f6fc4, #3566b0, #4a7fd6, #2f5ea8). Jobs show as accents on top of the blue: farmer straw hat, forester green cap, fisher teal hat, builder orange headband and tool, priest white robe trim with a feather headdress. That way the whole tribe reads as one blue people from afar, and jobs are still clear up close. Blue also tints tribe flags and festival bunting. A future rival tribe gets a different colour.
 

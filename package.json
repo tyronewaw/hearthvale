@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "balance": "vitest run --config vitest.balance.config.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

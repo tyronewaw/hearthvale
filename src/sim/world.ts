@@ -1,3 +1,5 @@
+import type { RoleId, StructKind } from './defs';
+
 /**
  * World constants and torus helpers.
  *
@@ -59,6 +61,81 @@ export function clamp(v: number, a: number, b: number): number {
   return v < a ? a : v > b ? b : v;
 }
 
+/** A home: grows from tepee (0) to great lodge (5) with the flat land around it. */
+export interface Home {
+  kind: 'home';
+  id: number;
+  x: number;
+  y: number;
+  lv: number;
+  /** Villagers living inside (fractional: grows continuously). */
+  pop: number;
+  /** Growth bonus from nearby trees (1 = none). */
+  tb: number;
+}
+
+/** A work building, or a construction site while prog < 1. */
+export interface Struct {
+  kind: 'struct';
+  id: number;
+  k: StructKind;
+  x: number;
+  y: number;
+  prog: number;
+  /** Seconds of fertiliser left (doubles a farm's yield). */
+  fert: number;
+}
+
+export type VillType = 'settler' | 'resident' | 'worker';
+
+/** A walking villager. Settlers look for land, residents potter round home, workers work. */
+export interface Vill {
+  id: number;
+  type: VillType;
+  role: RoleId;
+  /** Struct id of the job, or null. */
+  job: number | null;
+  /** Home id (residents), or null. */
+  home: number | null;
+  x: number;
+  y: number;
+  /** Position at the start of this tick, for render interpolation. */
+  px: number;
+  py: number;
+  tx: number;
+  ty: number;
+  think: number;
+  blocked: number;
+  /** Clothing shade (tribe blue) and skin tone indices. */
+  c: number;
+  sk: number;
+  /** Heading in radians (atan2 of movement in x/y). */
+  face: number;
+  st: '' | 'sit' | 'work' | 'rest';
+  t: number;
+  dizzy: number;
+  wave: number;
+  mv: boolean;
+  spot: [number, number] | null;
+  spotT: number;
+  /** Carrying building materials (builders). */
+  carry: number;
+  goal: [number, number] | null;
+  chop: [number, number] | null;
+  plant: [number, number] | null;
+}
+
+/** What the god hand is holding. */
+export type Held = { k: 'v'; v: Vill } | { k: 'tree'; tree: number } | { k: 'rock'; rock: number };
+
+export interface Stats {
+  strokes: number;
+  drops: number;
+  throws: number;
+  woodIn: number;
+  taught: number;
+}
+
 /** Persistent world state. Plain data only, so it serialises cleanly. */
 export interface State {
   v: 3;
@@ -69,12 +146,31 @@ export interface State {
   tree: Uint8Array;
   flower: Uint8Array;
   rock: Uint8Array;
-  /** Tile where the village starts (the Hearth goes here in phase 3). */
+  /** Tile where the village started (the first Hearth). */
   start: [number, number];
   faith: number;
   food: number;
   wood: number;
   rngState: number;
+  /** Next entity id. */
+  uid: number;
+  homes: Home[];
+  structs: Struct[];
+  vills: Vill[];
+  held: Held | null;
+  totem: [number, number] | null;
+  /** Highest population reached (unlocks blessings). */
+  best: number;
+  /** Highest home level reached. */
+  maxLv: number;
+  popNow: number;
+  won: boolean;
+  rains: { x: number; y: number; t: number }[];
+  /** Festival seconds left. */
+  fest: number;
+  cheers: { x: number; y: number; t: number }[];
+  stat: Stats;
+  hinted: Record<string, 1>;
 }
 
 export const season = (t: number): number => Math.floor(t / DAY / 3) % 4;
