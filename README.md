@@ -21,6 +21,7 @@ It is being rebuilt in phases, and each phase ends playable.
 11. ✅ Land borders on the ground; Red festivals, a Red shrine, and tooltips that say what would win them over
 12. ✅ Pets change as they grow: lamb to curly-horned ram, baby monkey to wise old monkey, chick to rooster
 13. ✅ Detailed tribal buildings in your tribe's colours; building sites go up stake by stake, frame by frame
+14. ✅ Bigger buildings: work buildings take 2×2 tiles, and a great lodge stands in its own palisaded compound
 
 ## Controls (so far)
 - **Hand** (`1`): grab villagers, trees and rocks. Let go gently to drop, or flick and let go to throw: they arc, bounce, splash and get up a little dizzy. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.

@@ -24,11 +24,11 @@ await page.mouse.move(2, 690);
 
 const ITEMS = [
   ...[0, 1, 2, 3, 4, 5].map((lv) => ({ label: ['Tepee', 'Hut', 'Round hut', 'Big hut', 'Longhouse', 'Great lodge'][lv], home: { lv, tribe: 0, bel: 0 } })),
-  ...['hearth', 'farm', 'lumber', 'fish', 'shrine', 'pen'].map((k) => ({ label: k[0].toUpperCase() + k.slice(1), struct: { k, prog: 1, tribe: 0 } })),
-  ...[0.1, 0.4, 0.75].map((p) => ({ label: `Site ${Math.round(p * 100)}%`, struct: { k: 'farm', prog: p, tribe: 0 } })),
+  ...['hearth', 'farm', 'lumber', 'fish', 'shrine', 'pen'].map((k) => ({ label: k[0].toUpperCase() + k.slice(1), struct: { k, prog: 1, tribe: 0, sz: 2 } })),
+  ...[0.1, 0.4, 0.75].map((p) => ({ label: `Site ${Math.round(p * 100)}%`, struct: { k: 'farm', prog: p, tribe: 0, sz: 2 } })),
   { label: 'Red round hut', home: { lv: 2, tribe: 1, bel: 0 } },
   { label: 'Red, half won', home: { lv: 3, tribe: 1, bel: 50 } },
-  { label: 'Red shrine', struct: { k: 'shrine', prog: 1, tribe: 1 } },
+  { label: 'Red shrine', struct: { k: 'shrine', prog: 1, tribe: 1, sz: 2 } },
 ];
 const tiles = [];
 let id = 900000;
@@ -39,7 +39,7 @@ for (const it of ITEMS) {
     S.homes = it.home ? [{ kind: 'home', id, x, y, pop: 2, tb: 1, ...it.home }] : [];
     S.structs = it.struct ? [{ kind: 'struct', id, x, y, fert: 0, ...it.struct }] : [];
     S.vills = [];
-    const r = hv.rig; r.fx = x + 0.5; r.fz = y + 0.2; r.zoom = it.home?.lv >= 4 || it.struct?.k === 'hearth' ? 0.1 : 0.06; r.yaw = 0.6; r.apply();
+    const c = it.struct?.sz === 2 ? 1 : 0.5, r = hv.rig; r.fx = x + c; r.fz = y + c - 0.3; r.zoom = it.home?.lv === 5 ? 0.15 : it.home?.lv >= 4 || it.struct ? 0.11 : 0.06; r.yaw = 0.6; r.apply();
   }, [it, id++]);
   await page.waitForTimeout(1700); // let a new home finish rising
   tiles.push({ label: it.label, png: (await page.screenshot({ clip: { x: 300, y: 190, width: 300, height: 300 } })).toString('base64') });

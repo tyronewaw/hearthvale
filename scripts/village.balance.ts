@@ -25,7 +25,9 @@ it(`balance: ${DAYS} days, seed ${SEED}`, () => {
     const h0 = S.h[idx(b.x, b.y)]!;
     for (let tries = 0; tries < 12; tries++) {
       const vx = b.x - 2 + R.int(6), vy = b.y - 2 + R.int(6), hv = S.h[idx(vx, vy)]!;
-      if (hv !== h0) {
+      // a careful player doesn't dig under their own buildings (a corner of any building tile)
+      const underBuilding = [[0, 0], [-1, 0], [0, -1], [-1, -1]].some(([dx, dy]) => sim.bmap[idx(vx + dx!, vy + dy!)]?.kind === 'struct');
+      if (hv !== h0 && !underBuilding) {
         const t = new Set<number>();
         if (bump(S, vx, vy, hv < h0 ? 1 : -1, t)) {
           S.faith -= 1;
@@ -53,11 +55,18 @@ it(`balance: ${DAYS} days, seed ${SEED}`, () => {
       }
       const farms = S.structs.filter((s) => s.k === 'farm' && s.tribe === 0), lumbers = S.structs.filter((s) => s.k === 'lumber' && s.tribe === 0);
       const want = farms.length < 1 + Math.floor(S.popNow / 60) || (S.food < 30 && farms.length < 2 + S.popNow / 25) ? 'farm' : lumbers.length < 1 + Math.floor(S.popNow / 150) ? 'lumber' : null;
-      if (H && want) {
-        for (let tries = 0; tries < 40; tries++) {
-          const x = H.x + R.int(21) - 10, y = H.y + R.int(21) - 10;
-          if (validSite(sim, want, wrap(x), wrap(y)) && S.wood >= (want === 'farm' ? 10 : 6)) { sim.build(want, x, y); break; }
-        }
+      if (H && want && S.wood >= (want === 'farm' ? 10 : 6)) {
+        // look outwards from the Hearth for the nearest spot with room (as a player would)
+        let site: [number, number] | null = null, bd = 1e9;
+        for (let y = H.y - 18; y <= H.y + 18; y++)
+          for (let x = H.x - 18; x <= H.x + 18; x++) {
+            const d = tdist(x, y, H.x, H.y) + R.next() * 2;
+            if (d < bd && validSite(sim, want, wrap(x), wrap(y))) {
+              bd = d;
+              site = [wrap(x), wrap(y)];
+            }
+          }
+        if (site) sim.build(want, ...site);
       }
       for (const s of S.structs) {
         if (s.tribe !== 0) continue; // the player only staffs our own buildings

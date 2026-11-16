@@ -11,7 +11,7 @@ import { Rng } from './rng';
 import { festivalImpress, fixTribes, spawnRival, stepRival } from './rival';
 import { bump, isWater, level, rise } from './terrain';
 import {
-  blueHomes, builtPen, calcCrops, destroyHome, grabFlora, grabVillager, impress, land, mkV, placeStruct, popCount, rebuildMap, recheck,
+  blueHomes, builtPen, calcCrops, centreX, centreY, sizeOf, destroyHome, grabFlora, grabVillager, impress, land, mkV, placeStruct, popCount, rebuildMap, recheck,
   roleCount, spark, stepV, syncResidents, tribePop, validSite, finish, type Ctx,
 } from './village';
 import { generateWorld } from './worldgen';
@@ -283,7 +283,7 @@ export class Sim implements Ctx, PetCtx {
       const dup = S.structs.some((s) => s.k === k) && (k === 'hearth' || k === 'pen');
       this.emit({
         k: 'toast',
-        msg: k === 'fish' ? 'A fishing hut must touch water, with space around it' : dup ? `You already have a ${STRUCTS[k].name}` : 'Needs flat, clear land with space around it',
+        msg: k === 'fish' ? 'A fishing hut needs 2×2 dry tiles right beside water, with space around' : dup ? `You already have a ${STRUCTS[k].name}` : 'Needs a flat, clear 2×2 patch with space around it',
       });
       this.emit({ k: 'sfx', id: 'no' });
       return false;
@@ -349,7 +349,8 @@ export class Sim implements Ctx, PetCtx {
   /** The first quest: a pet arrives by the Hearth (or at x, y). */
   choosePet(kind: PetKind, name: string, x?: number, y?: number): void {
     const H = this.S.structs.find((s) => s.k === 'hearth');
-    const px = x ?? (H ? H.x + 1.5 : this.S.start[0] + 1.5), py = y ?? (H ? H.y + 1.5 : this.S.start[1] + 1.5);
+    const off = H ? sizeOf(H) / 2 + 1 : 1.5;
+    const px = x ?? (H ? centreX(H) + off : this.S.start[0] + 1.5), py = y ?? (H ? centreY(H) + off : this.S.start[1] + 1.5);
     this.S.pet = mkPet(kind, name || PETS[kind].def, px, py);
     spark(this, px, py, 'spark', 10);
     this.emit({ k: 'sfx', id: 'magic' });
@@ -385,7 +386,7 @@ export class Sim implements Ctx, PetCtx {
       this.emit({ k: 'toast', msg: 'Build a Pet pen first' });
       return false;
     }
-    this.sendPet(pen.x + 0.5, pen.y + 0.5, `${P.name} trots home to its pen`);
+    this.sendPet(centreX(pen), centreY(pen), `${P.name} trots home to its pen`);
     return true;
   }
 

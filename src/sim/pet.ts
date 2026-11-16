@@ -8,7 +8,7 @@ import { BALANCE } from './balance';
 import { bloom, festival, rain } from './blessings';
 import { BMAX, STRUCTS } from './defs';
 import { isWater, setVertices, tileFlat } from './terrain';
-import { builtPen, findTile, finish, hearth, homeById, impress, mkV, nearWater, spark, structById, type Ctx } from './village';
+import { builtPen, centreX, centreY, findTile, finish, hearth, homeById, impress, mkV, sizeOf, spark, structById, structOk, type Ctx } from './village';
 import { clamp, idx, nightF, tdist, wd, wrap, type Held, type State, type Vill } from './world';
 
 export type PetKind = 'sheep' | 'monkey' | 'chicken';
@@ -197,8 +197,7 @@ export function safeReshape(c: PetCtx, fn: (touched: Set<number>) => void): bool
   const S = c.S, before = S.h.slice(), touched = new Set<number>();
   fn(touched);
   if (!touched.size) return false;
-  const ok = S.homes.every((b) => tileFlat(S, b.x, b.y)) &&
-    S.structs.every((s) => (s.k === 'fish' ? !isWater(S, s.x, s.y) && !!nearWater(S, s.x, s.y) : tileFlat(S, s.x, s.y)));
+  const ok = S.homes.every((b) => tileFlat(S, b.x, b.y)) && S.structs.every((s) => structOk(S, s));
   if (!ok) {
     S.h.set(before);
     return false;
@@ -230,7 +229,7 @@ export function petRise(c: PetCtx, x: number, y: number): boolean {
 /** The pet is in its pen (within a tile of the middle). */
 function penNear(S: State, P: Pet): boolean {
   const pen = builtPen(S);
-  return !!pen && tdist(pen.x + 0.5, pen.y + 0.5, P.x, P.y) < 1.2;
+  return !!pen && tdist(centreX(pen), centreY(pen), P.x, P.y) < 1.2;
 }
 const STRUCTS_NAME = (S: State, id: number | undefined) => {
   const s = structById(S, id ?? null);
@@ -278,7 +277,7 @@ export function startAct(c: PetCtx, id: PetActId): void {
     a.t = 5;
   } else if (id === 'sleep') {
     const pen = builtPen(S), post = P.mode === 'stay' ? P.post : null;
-    if (pen && tdist(pen.x + 0.5, pen.y + 0.5, P.x, P.y) < 30 && (!post || tdist(pen.x + 0.5, pen.y + 0.5, post[0], post[1]) < 8)) {
+    if (pen && tdist(centreX(pen), centreY(pen), P.x, P.y) < 30 && (!post || tdist(centreX(pen), centreY(pen), post[0], post[1]) < 8)) {
       tgt = [pen.x, pen.y];
       a.pen = true;
     } else tgt = nightF(S.t) > 0.5 && H && tdist(H.x, H.y, P.x, P.y) < 12 ? [wrap(H.x + 1), wrap(H.y + 1)] : [Math.floor(P.x), Math.floor(P.y)];
@@ -356,6 +355,12 @@ export function startAct(c: PetCtx, id: PetActId): void {
   }
   a.tx = wrap(tgt[0] + 0.5);
   a.ty = wrap(tgt[1] + 0.5);
+  const pen = a.pen ? builtPen(S) : undefined;
+  if (pen) {
+    // sleep in the middle of the pen, whatever its size
+    a.tx = wrap(centreX(pen));
+    a.ty = wrap(centreY(pen));
+  }
   a.tile = tgt;
   P.act = a;
 }
@@ -406,7 +411,7 @@ export function finishAct(c: PetCtx, a: PetAct): 'keep' | void {
         P.carry = 1;
         const d = S.structs.filter((s) => s.k === 'hearth' || s.k === 'lumber').sort((p, q) => tdist(p.x, p.y, P.x, P.y) - tdist(q.x, q.y, P.x, P.y))[0];
         if (d) {
-          P.act = { ...a, step: 1, ph: 'go', tx: wrap(d.x + 0.5), ty: wrap(d.y + 1.2), tile: [d.x, d.y], t: 1.5, go: 0 };
+          P.act = { ...a, step: 1, ph: 'go', tx: wrap(centreX(d)), ty: wrap(centreY(d) + sizeOf(d) / 2 + 0.2), tile: [d.x, d.y], t: 1.5, go: 0 };
           return 'keep';
         }
         P.carry = null;
@@ -427,7 +432,7 @@ export function finishAct(c: PetCtx, a: PetAct): 'keep' | void {
     }
   } else if (a.id === 'sleep' && a.pen) {
     const pen = builtPen(S);
-    if (pen && tdist(pen.x + 0.5, pen.y + 0.5, P.x, P.y) < 1.2) {
+    if (pen && tdist(centreX(pen), centreY(pen), P.x, P.y) < 1.2) {
       // the bedding goes on the fields: farms near the pen yield double for a while
       let n = 0;
       for (const s of S.structs)
@@ -438,7 +443,7 @@ export function finishAct(c: PetCtx, a: PetAct): 'keep' | void {
       P.poop = 0;
       if (n) {
         msg = `${P.name}'s bedding fertilised ${n === 1 ? 'a farm' : n + ' farms'}`;
-        spark(c, pen.x + 0.5, pen.y + 0.5, 'spark', 6);
+        spark(c, centreX(pen), centreY(pen), 'spark', 6);
       }
     }
   } else if (a.id === 'trick' && a.trick) {

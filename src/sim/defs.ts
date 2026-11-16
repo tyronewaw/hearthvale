@@ -22,10 +22,10 @@ export interface StructDef {
 }
 export const STRUCTS: Record<StructKind, StructDef> = {
   hearth: { name: 'Hearth', wood: 0, cap: 4, role: 'builder', desc: 'The village heart and store. Drop villagers here to make builders. Only one.' },
-  farm: { name: 'Farm', wood: 10, cap: 4, role: 'farmer', desc: 'Needs flat land. Farmers work the fields around it for food.' },
-  lumber: { name: 'Lumber camp', wood: 6, cap: 3, role: 'forester', desc: 'Needs flat land. Foresters fell and replant nearby trees for wood.' },
-  fish: { name: 'Fishing hut', wood: 8, cap: 3, role: 'fisher', desc: 'Must touch the sea or a lake. Fishers bring in food all year.' },
-  shrine: { name: 'Shrine', wood: 25, cap: 3, role: 'priest', desc: 'Needs flat land. Priests pray here for extra faith.' },
+  farm: { name: 'Farm', wood: 10, cap: 4, role: 'farmer', desc: 'Needs a flat 2×2 patch. Farmers work the fields round it for food.' },
+  lumber: { name: 'Lumber camp', wood: 6, cap: 3, role: 'forester', desc: 'Needs a flat 2×2 patch. Foresters fell and replant nearby trees for wood.' },
+  fish: { name: 'Fishing hut', wood: 8, cap: 3, role: 'fisher', desc: 'Takes 2×2 tiles of dry land right beside the sea or a lake. Fishers bring in food all year.' },
+  shrine: { name: 'Shrine', wood: 25, cap: 3, role: 'priest', desc: 'Needs a flat 2×2 patch. Priests pray here for extra faith.' },
   pen: { name: 'Pet pen', wood: 12, cap: 0, role: 'settler', desc: 'Your pet\'s own home. It sleeps here and rests twice as fast, and its bedding fertilises farms nearby. Only one.' },
 };
 /** Buildings that can only be built once. */

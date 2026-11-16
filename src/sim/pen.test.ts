@@ -6,7 +6,7 @@ import { QUESTS, remapQuest } from './quests';
 import { deserialize, serialize } from './save';
 import { Sim } from './sim';
 import { isWater, slopeOk, tileFlat } from './terrain';
-import { land, mkV, placeStruct } from './village';
+import { centreX, centreY, land, mkV, placeStruct } from './village';
 import { emptyState } from './worldgen';
 import { DAY, TICK, idx, tdist } from './world';
 
@@ -60,7 +60,7 @@ describe('the pet pen', () => {
     const inPen = () => P.act?.id === 'sleep' && P.act.ph === 'do';
     expect(run(sim, 30, inPen)).toBe(true);
     expect(P.act!.pen).toBe(true);
-    expect(tdist(P.x, P.y, pen.x + 0.5, pen.y + 0.5)).toBeLessThan(0.5);
+    expect(tdist(P.x, P.y, centreX(pen), centreY(pen))).toBeLessThan(0.5);
     const e0 = P.need.energy;
     run(sim, 2);
     expect(P.need.energy - e0).toBeCloseTo(2 * 2.4 * BALANCE.penRest, 0);
@@ -75,7 +75,7 @@ describe('the pet pen', () => {
     placeStruct(sim, 'pen', 20, 20, 1);
     expect(sim.penPet()).toBe(true);
     expect(P.mode).toBe('stay');
-    expect(P.post).toEqual([20.5, 20.5]);
+    expect(P.post).toEqual([21, 21]); // the middle of the 2×2 pen
   });
 });
 

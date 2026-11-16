@@ -13,7 +13,7 @@ import {
 } from './village';
 import { waterDist } from './worldgen';
 import { N, clamp, idx, tdist, wrap, type Home, type Rival, type State, type Struct, type Vill } from './world';
-import { canSettle, mkV } from './village';
+import { centreX, centreY, mkV, validSite } from './village';
 
 /** Saves from before the Red tribe: everything already in the world is ours. */
 export function fixTribes(S: State): void {
@@ -160,18 +160,18 @@ export function stepRival(c: PetCtx, dt: number): void {
   else if (RH && (Rv.festIn -= dt) <= 0) {
     Rv.festIn = B.rivalFestEvery * (0.8 + c.rng.next() * 0.4);
     Rv.fest = B.rivalFestSeconds;
-    spark(c, RH.x + 0.5, RH.y + 0.5, 'note', 6);
+    spark(c, centreX(RH), centreY(RH), 'note', 6);
     c.emit({ k: 'toast', msg: 'The Red tribe is holding a festival! Bless their land now: they are twice as easy to impress' });
   }
   // once they're a proper village, their elder raises a shrine by the Hearth
   if (RH && !rivalShrine(S) && tribePop(S, 1) >= B.rivalShrinePop) {
-    const t = findTile(c, RH.x + 0.5, RH.y + 0.5, 6, (x, y) => canSettle(c, x, y));
+    const t = findTile(c, centreX(RH), centreY(RH), 7, (x, y) => validSite(c, 'shrine', x, y));
     if (t) placeStruct(c, 'shrine', t[0], t[1], 0, 1);
   }
   if ((Rv.elder -= dt) <= 0) {
     Rv.elder = B.rivalElderEvery;
     if (RH && tribePop(S, 1) < B.rivalMax) {
-      const t = findTile(c, RH.x + 0.5, RH.y + 0.5, B.rivalRange - 3, (x, y) => elderSpot(c, x, y));
+      const t = findTile(c, centreX(RH), centreY(RH), B.rivalRange - 3, (x, y) => elderSpot(c, x, y));
       if (t) petLevel(c, t[0], t[1]);
     }
   }
@@ -181,7 +181,7 @@ export function stepRival(c: PetCtx, dt: number): void {
   if (!left) {
     Rv.united = true;
     for (const s of S.structs) s.tribe = 0;
-    if (RH) spark(c, RH.x + 0.5, RH.y + 0.5, 'heart', 14);
+    if (RH) spark(c, centreX(RH), centreY(RH), 'heart', 14);
     c.emit({ k: 'toast', msg: 'The whole Red tribe has joined you. One people!' });
     c.emit({ k: 'sfx', id: 'magic' });
     c.emit({ k: 'ui' });

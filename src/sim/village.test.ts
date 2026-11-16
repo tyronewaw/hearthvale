@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BALANCE } from './balance';
 import { BMAX } from './defs';
 import { Sim, growthMultiplier, homeGrowth } from './sim';
-import { fields, levelFor, mkV, newHome, placeStruct, popCount, rebuildMap, recheck } from './village';
+import { calcCrops, fields, footprint, land, levelFor, mkV, newHome, placeStruct, popCount, rebuildMap, recheck, sizeOf, validSite } from './village';
 import { emptyState } from './worldgen';
 import { DAY, N, TICK, idx } from './world';
 
@@ -24,10 +24,10 @@ describe('fields and levels', () => {
     expect(fields(sim, 10, 10)).toBe(25);
     sim.S.tree[idx(11, 11)] = 1;
     expect(fields(sim, 10, 10)).toBe(24);
-    placeStruct(sim, 'farm', 8, 12, 1);
-    expect(fields(sim, 10, 10)).toBe(23);
+    placeStruct(sim, 'farm', 8, 12, 1); // 2×2: (8..9, 12..13), two of its tiles are in the 5×5
+    expect(fields(sim, 10, 10)).toBe(22);
     sim.S.h[idx(12, 8)] = 3; // vertex (12,8) raised: tiles (11..12, 7..8) are no longer flat
-    expect(fields(sim, 10, 10)).toBe(21);
+    expect(fields(sim, 10, 10)).toBe(20);
   });
 
   it('wraps around the planet seam', () => {
@@ -191,5 +191,62 @@ describe('a fresh world', () => {
     run(b, 120);
     expect(JSON.stringify(a.S.homes)).toBe(JSON.stringify(b.S.homes));
     expect(a.S.vills.map((v) => [v.x.toFixed(3), v.y.toFixed(3)])).toEqual(b.S.vills.map((v) => [v.x.toFixed(3), v.y.toFixed(3)]));
+  });
+});
+
+describe('bigger buildings (2×2)', () => {
+  it('a new building covers 2×2 tiles, and old saves keep their 1×1 buildings', () => {
+    const sim = flatSim();
+    const farm = placeStruct(sim, 'farm', 20, 20, 1);
+    expect(sizeOf(farm)).toBe(2);
+    for (const [x, y] of [[20, 20], [21, 20], [20, 21], [21, 21]] as const) expect(sim.bmap[idx(x, y)]).toBe(farm);
+    expect(sim.bmap[idx(22, 20)]).toBeNull();
+    const old = placeStruct(sim, 'lumber', 30, 30, 1, 0, 1);
+    expect(footprint(old)).toEqual([[30, 30]]);
+    delete (old as { sz?: number }).sz; // as a pre-phase-14 save has it
+    expect(sizeOf(old)).toBe(1);
+  });
+
+  it('needs the whole footprint flat at one height, clear, and with space around', () => {
+    const sim = flatSim();
+    expect(validSite(sim, 'farm', 20, 20)).toBe(true);
+    sim.S.tree[idx(21, 21)] = 1;
+    expect(validSite(sim, 'farm', 20, 20)).toBe(false);
+    sim.S.tree[idx(21, 21)] = 0;
+    sim.S.h[idx(22, 22)] = 3; // the far corner tile is no longer flat
+    expect(validSite(sim, 'farm', 20, 20)).toBe(false);
+    sim.S.h[idx(22, 22)] = 2;
+    placeStruct(sim, 'shrine', 22, 20, 1);
+    expect(validSite(sim, 'farm', 20, 20)).toBe(false); // right next door
+    expect(validSite(sim, 'farm', 19, 20)).toBe(true); // with a gap of one tile
+  });
+
+  it('is lost if any tile of its footprint stops being flat', () => {
+    const sim = flatSim();
+    const farm = placeStruct(sim, 'farm', 20, 20, 1);
+    sim.S.h[idx(22, 22)] = 3;
+    recheck(sim);
+    expect(sim.S.structs).not.toContain(farm);
+    expect(sim.bmap[idx(21, 21)]).toBeNull();
+  });
+
+  it('a farm is ringed by twelve fields, and a fishing hut needs water beside its footprint', () => {
+    const sim = flatSim();
+    placeStruct(sim, 'farm', 20, 20, 1);
+    calcCrops(sim);
+    expect(sim.crops.size).toBe(12);
+    const S = sim.S;
+    for (let y = 36; y < 54; y++) for (let x = 36; x < 45; x++) S.h[idx(x, y)] = 0; // sea up to vertex column 44
+    for (let y = 36; y < 54; y++) S.h[idx(45, y)] = 1; // a beach slope
+    expect(validSite(sim, 'fish', 44, 44)).toBe(true); // tile column 43 beside it is water
+    expect(validSite(sim, 'fish', 47, 44)).toBe(false); // too far from the water
+  });
+
+  it('a villager dropped anywhere on a big building gets its job', () => {
+    const sim = flatSim();
+    const farm = placeStruct(sim, 'farm', 20, 20, 1);
+    const v = mkV(sim, 'settler', 5, 5);
+    land(sim, { k: 'v', v }, 21.8, 21.8, false); // the far corner tile
+    expect(v.job).toBe(farm.id);
   });
 });

@@ -10,7 +10,7 @@ import { Audio } from './audio/audio';
 import { TOOL } from './sim/defs';
 import { Sim } from './sim/sim';
 import { beliefRate, rivalMood } from './sim/rival';
-import { fields, inInfluence, rivalHearth, validSite, workersAt } from './sim/village';
+import { NEW_SIZE, fields, inInfluence, rivalHearth, validSite, workersAt } from './sim/village';
 import { DAY, TICK, idx, tdist, wd, wrap } from './sim/world';
 import { bendDrop } from './render/bend';
 import { CameraRig } from './render/camera-rig';
@@ -55,6 +55,8 @@ declare global {
 }
 
 const params = new URLSearchParams(location.search);
+/** Buildings are 2×2: anchor the footprint so its centre is the corner nearest the pointer. */
+const buildAnchor = (h: GroundHit): [number, number] => [wrap(h.vx - NEW_SIZE / 2), wrap(h.vz - NEW_SIZE / 2)];
 const newSeed = () => (Date.now() ^ (Math.random() * 0xffffff)) & 0xffffff;
 const sandbox = params.has('sandbox');
 
@@ -218,7 +220,7 @@ const controls = new Controls(canvas, rig, {
   tool: () => tool,
   setTool: pickTool,
   act: (id, hit) => {
-    const ok = id === 'build' ? sim.build(bsel, hit.tx, hit.tz) : sim.useTool(id, hit.vx, hit.vz);
+    const ok = id === 'build' ? sim.build(bsel, ...buildAnchor(hit)) : sim.useTool(id, hit.vx, hit.vz);
     if (ok) controls.updateHover();
   },
   tryGrab: (cx, cy) => {
@@ -493,7 +495,7 @@ function frame(now: number): void {
     ? { at: { vx: hover.vx, vz: hover.vz }, r: td!.r, square: tool === 'flat', ok: (sandbox || sim.S.best >= td!.need) && (sandbox || sim.S.faith >= td!.cost) }
     : null;
   const ghost = tool === 'build' && hover
-    ? { kind: bsel, tile: [hover.tx, hover.tz] as [number, number], ok: validSite(sim, bsel, hover.tx, hover.tz) && (sandbox || sim.S.wood >= STRUCTS[bsel].wood) }
+    ? { kind: bsel, tile: buildAnchor(hover), ok: validSite(sim, bsel, ...buildAnchor(hover)) && (sandbox || sim.S.wood >= STRUCTS[bsel].wood) }
     : null;
   R.render(now / 1000, {
     dt: rdt, alpha: paused ? 1 : Math.min(1, acc / TICK), hover, tool, crops: sim.crops, ghost, bless,
