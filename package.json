@@ -14,7 +14,8 @@
     "smoke": "node scripts/smoke.mjs",
     "balance": "vitest run --config vitest.balance.config.ts",
     "perf": "node scripts/perf.mjs",
-    "petshots": "node scripts/petshots.mjs"
+    "petshots": "node scripts/petshots.mjs",
+    "buildshots": "node scripts/buildshots.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

@@ -3,7 +3,13 @@
 A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and keyboard first; phones only need to keep working, with no new phone-specific work). It looks like Populous: The Beginning (a small curved planet, terrain you reshape live, round thatched huts, little tribespeople) and plays like Black & White 2 (a physical god hand, a creature you raise and teach). The style is stylised low-poly with soft light. Nobody dies.
 
 - **Design reference:** `legacy/index.html` is the original 2D pixel prototype, unchanged and playable at `/legacy/`. When porting a rule, read it there first; it is the spec.
-- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. Phase 9 (pet pen and more tricks), phase 10 (the Red tribe, won over Black & White style), phase 11 (land borders on the ground, Red festivals and shrine) and phase 12 (pets look different at each growth stage) were chosen by the user and built after that. Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
+- **Plan:** an 8-phase rebuild; each phase ends playable and gets its own branch and PR. Done so far: phase 1 (curved wrap-around terrain and land editing), phase 2 (water, sky, day/night, seasons, shadows, trees), phase 3 (huts, villagers, growth, economy, building, saves), phase 4 (the 3D god hand with Rapier physics throws), phase 5 (the god pet) and phase 6 (blessings, quests, sound, prototype save migration). Phase 7 (performance: chunk frustum culling with the bend, tree LOD) and phase 8 (installable PWA that plays offline) are done; all eight planned phases are merged to main. The user chose these and they were built after that:
+  - phase 9: pet pen and more tricks
+  - phase 10: the Red tribe, won over Black & White style
+  - phase 11: land borders on the ground, Red festivals and shrine
+  - phase 12: pets look different at each growth stage
+  - phase 13: detailed tribal buildings, tribe colours, construction stages
+  - next, phase 14: bigger buildings (2×2 work buildings, compounds) Local AI audio is parked. Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
 ## Commands
 - `npm run dev` starts the Vite dev server. Useful URL flags: `?seed=42`, `?sandbox` (tools are free), `?stats` (fps, draw calls, triangles, tier), `?nohelp`, `?q=low|medium|high` (quality tier), `?nobend` (flat world, for debugging).
@@ -12,6 +18,7 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
 - `npm run smoke` builds, serves, and plays in headless Chromium through `window.__hv`. It fails on any console error and saves screenshots to `shots/` (gitignored).
 - `node scripts/icons.mjs` regenerates `public/icons/*.png` (a pixel-art hut drawn in code) in headless Chromium.
 - `npm run perf` measures draw calls, triangles and frame time on the high and medium tiers at three zooms, with a grown village (software GL, so trust the counts, not the ms).
+- `npm run buildshots` renders every building (home levels, work buildings, a site at three stages, Red homes) into `shots/buildings.png`, for reviewing building art.
 - `npm run petshots` renders every pet species at every growth stage into `shots/pets-growth.png` (3×3), for reviewing pet art.
 - `npm run balance` runs a headless scripted player for `DAYS` (default 30) and writes a day-by-day table to `shots/balance.txt`. It takes about 3 s.
 - Add `?fresh` to start a new world instead of loading the save, and `?nosave` to stop autosaving.
@@ -54,10 +61,14 @@ src/render/   three.js only, and it reads sim state
   water.ts    stylised sea: shore-distance texture (BFS from land, RepeatWrapping) → shallows, foam, sparkle
   flora.ts    instanced trees (3 kinds, canopy + trunk), flowers, rocks; seasonal colours
   clouds.ts   drifting instanced clouds that cast shadows
-  kit.ts      model kit: primitives + per-face colours → one merged vertex-coloured geometry
-  models.ts   huts (6 home levels), Hearth, Farm, Lumber camp, Fishing hut, Shrine, scaffold, totem
-  buildings.ts instanced buildings + scaffolds, door glow, night light pools, hearth fire and
-              point light, shrine crystals, crops, totem, build ghost, chimney smoke
+  kit.ts      model kit: primitives + per-face colours → one merged vertex-coloured geometry; parts added
+              with `tint` get a per-vertex tint mask
+  models.ts   original tribal designs: huts (6 home levels, plus simpler far-LOD versions), Hearth, Farm,
+              Lumber camp, Fishing hut, Shrine, Pet pen; building-site stakes and timber frame; totem
+  buildings.ts instanced buildings (one draw call per model, tribe colour per instance), building sites
+              in stages, new homes rising in their frame, level-up puffs, home LOD beyond 30 units,
+              door glow, night light pools, hearth fire and point light, shrine crystals, crops, totem,
+              build ghost, chimney smoke
   villagers.ts per-part instanced villagers (blue tribe), procedural walk/work/wave/sit/swim/held,
               blob shadows, culled to the view, screen-space pick()
   particles.ts pooled particles: lit (smoke, puffs, leaves, splashes) and glowing (sparks, hearts…)
@@ -104,7 +115,12 @@ legacy/       the 2D prototype (design reference; do not edit)
 - **Entity references are ids.** `Vill.job` and `Vill.home` hold ids, which keeps saves plain. The tile→building map (`bmap`) and the crop set are derived in the Sim, not saved.
 - **Hunger slows growth to a 10% floor** (`BALANCE.hungerFloor`). The prototype stopped growth entirely at 0 food; the cosy rule says hunger only slows it. **The goal is 1000 villagers** (the prototype's 500 ×2 for four times the land). The balance probe reaches 500 around day 9 and 1000 around day 14.
 - **Villagers render cheaply.** Each body part is one InstancedMesh, so about 20 draw calls for everyone. Only villagers within the view radius are drawn, nearest first, up to 900 (500 on low). They get blob shadows instead of shadow casting. Positions interpolate between ticks (`px`/`py` → `x`/`y`, wrap-aware).
-- **Buildings** are merged vertex-coloured models with one InstancedMesh per model. They're re-laid out every frame (cheap: hundreds of instances). Sites under construction grow from the ground (scale.y = prog) inside scaffolding.
+- **Buildings** (phase 13: the user asked for buildings "like Populous: The Beginning"). These are *original* designs with that chunky, hand-built tribal feel, not copies of that game's art.
+  - **Models.** Stone plinths, wattle walls with timber posts, rope-bound thatch, carved posts with painted caps, hide door curtains, pots, woodpiles and benches. The great lodge has a two-tier roof and a totem. Work buildings: a stilt granary farm, a lean-to lumber camp, a stilt fishing hut with a drying rack and canoe, and a standing-stone shrine with a carved pillar. Merged vertex-coloured models, one InstancedMesh per model, re-laid out every frame.
+  - **Tribe colours in one draw call.** Parts added with `tint` (painted wall band, dyed roof band, finial and roof flag, door curtain, banners) carry a per-vertex mask. `tintable()` replaces three's `color_vertex` chunk so the instance colour only applies where the mask is 1: blue for ours, red for theirs, blending with belief.
+  - **Construction in stages.** Stakes, rope and a wood pile from 0%. A timber frame from 20%. The building rising inside the frame from 55%.
+  - **Homes.** A new home rises from its frame over 1.4 s of *real* time (render dt is capped per frame, so slow frames would stall it). Growing a level throws a puff of dust.
+  - **LOD.** Homes more than 30 units (horizontally) from the camera use simpler models: no plinth, posts, ropes, props or door frames, but the same tribe colours. Empty instanced meshes are hidden, since they would still cost a draw call.
 - **The hand** picks villagers, trees and rocks in screen space from their drawn positions, not from the ground behind them. Held things hang from its grip point.
   - Pose by context: open when idle, reach when over something grabbable, point for the other tools, grip (lowered, fist) while you pan the world, hold while carrying.
   - It keeps a steady size on screen (scale ≈ 0.11 × camera distance), like a cursor, and the OS cursor is hidden over the world.
@@ -143,10 +159,10 @@ legacy/       the 2D prototype (design reference; do not edit)
 - **Gravity is 14 u/s²** (1 unit ≈ a villager's height × 2): snappy arcs, not floaty.
 - **Culling.** `GameRenderer.cull()` tests each of the 64 chunks against the camera frustum using its *bent* bounds: the drop is lowest at the far corner and highest at the near one, plus 2.2 headroom for trees and huts. The terrain hides culled chunks, and the flora only lays out instances in visible chunks. Instanced meshes stay `frustumCulled = false` because their bounds are unbent.
 - **Tree LOD.** Trees more than 28 units (horizontally) from the camera use a simple canopy with no trunk. The flora re-lays out when the visible chunk set or the camera's 4-unit LOD cell changes.
-- **Budgets (`npm run perf`, 1280×800, village of about 80):**
+- **Budgets (`npm run perf`, 1280×800, village of about 80).** Keep high under 150 calls and 300k triangles.
   - before culling: high 458k triangles at every zoom
-  - after: high 137k / 173k / 211k triangles (94–124 calls) at zoom 0.2 / 0.45 / 1
-  - after: medium 93k–141k triangles (66–96 calls)
+  - after culling (phase 7): high 137k / 173k / 211k triangles (94–124 calls) at zoom 0.2 / 0.45 / 1; medium 93k–141k triangles (66–96 calls)
+  - phase 13 detailed buildings, with home LOD and the tint mask: high 193k / 229k / 247k triangles (118 / 125 / 147 calls); medium 123k–163k triangles (80–109 calls)
 - **WebGPU is deferred.** The bend uses `onBeforeCompile`, which WebGPURenderer doesn't support (it needs TSL).
 - **The Red tribe** (phase 10, the user's design choice: "win them over"). Nobody fights.
   - Every home, struct and villager has `tribe` (0 ours, 1 Red). Red homes also have `bel` (0..100, how won over they are). `fixTribes` gives pre-tribe saves tribe 0.

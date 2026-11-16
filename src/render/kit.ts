@@ -20,7 +20,11 @@ const centre = new Vector3();
 export class Kit {
   private parts: BufferGeometry[] = [];
 
-  add(g: BufferGeometry, colour: FaceColour, at: Place = {}): this {
+  /**
+   * Add a part. Parts marked `tint` get a per-vertex `tint` of 1: materials made with
+   * `tintable()` colour those parts by the instance colour (the tribe's), leaving the rest as is.
+   */
+  add(g: BufferGeometry, colour: FaceColour, at: Place = {}, tint = false): this {
     const geo = (g.index ? g.toNonIndexed() : g.clone()) as BufferGeometry;
     for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k);
     const sc = at.scale ?? 1;
@@ -41,6 +45,7 @@ export class Kit {
       for (let k = 0; k < 3; k++) col.set([tmpC.r, tmpC.g, tmpC.b], (f * 3 + k) * 3);
     }
     geo.setAttribute('color', new BufferAttribute(col, 3));
+    geo.setAttribute('tint', new BufferAttribute(new Float32Array(n).fill(tint ? 1 : 0), 1));
     this.parts.push(geo);
     return this;
   }
