@@ -8,12 +8,12 @@ import { wd, type State, type Vill } from '../sim/world';
 import { bendDrop, bent } from './bend';
 import { Kit } from './kit';
 import { worldMat } from './materials';
-import { TRIBE_BLUE } from './models';
+import { TRIBE_BLUE, TRIBE_RED } from './models';
 import { WATER_Y, surfaceY } from './scale';
 
 const SKIN = ['#c98d5e', '#a8704a', '#e0b088', '#8a5a3a'].map((c) => new Color(c));
 const HAIR = ['#2a1a12', '#5a3420', '#1e1e2a', '#7a4b2a'].map((c) => new Color(c));
-const BLUE = TRIBE_BLUE.map((c) => new Color(c));
+const BLUE = TRIBE_BLUE.map((c) => new Color(c)), RED = TRIBE_RED.map((c) => new Color(c));
 /** Job accents on top of the tribe blue (sash/belt colour). */
 const BELT: Record<RoleId, Color> = {
   settler: new Color('#6b4426'), farmer: new Color('#c9a35a'), forester: new Color('#4f8a3c'),
@@ -185,7 +185,7 @@ export class Villagers {
       }
       this.drawn.push({ v, p: new Vector3(wx, y + 0.3 - bendDrop(wx, wz), wz) });
 
-      const skin = SKIN[v.sk % 4]!, blue = BLUE[v.c % 4]!;
+      const skin = SKIN[v.sk % 4]!, blue = (v.tribe === 1 ? RED : BLUE)[v.c % 4]!;
       // legs
       const swing = walking ? Math.sin(ph) * 0.7 : f.pose === 'fly' ? Math.sin(time * 14 + v.id) * 0.8 : held ? Math.sin(time * 8 + v.id) * 0.5 : sit ? -1.4 : 0;
       for (const side of [-1, 1]) {

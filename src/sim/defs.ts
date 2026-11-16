@@ -31,7 +31,7 @@ export const STRUCTS: Record<StructKind, StructDef> = {
 /** Buildings that can only be built once. */
 export const UNIQUE: readonly StructKind[] = ['hearth', 'pen'];
 /** Bump when the quest chain changes, so saves can map their quest index (see quests.ts). */
-export const QUEST_VERSION = 2;
+export const QUEST_VERSION = 3;
 export const STRUCT_KINDS = Object.keys(STRUCTS) as StructKind[];
 
 export type ToolId = 'hand' | 'raise' | 'lower' | 'build' | 'totem' | 'bloom' | 'flat' | 'rain' | 'isle' | 'fest';

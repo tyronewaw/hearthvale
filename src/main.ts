@@ -9,8 +9,9 @@ import { V2_KEY, migrateV2 } from './sim/migrate';
 import { Audio } from './audio/audio';
 import { TOOL } from './sim/defs';
 import { Sim } from './sim/sim';
-import { fields, validSite, workersAt } from './sim/village';
-import { DAY, TICK, idx, wd, wrap } from './sim/world';
+import { beliefRate } from './sim/rival';
+import { fields, inInfluence, rivalHearth, validSite, workersAt } from './sim/village';
+import { DAY, TICK, idx, tdist, wd, wrap } from './sim/world';
 import { bendDrop } from './render/bend';
 import { CameraRig } from './render/camera-rig';
 import { detectQuality } from './render/quality';
@@ -77,6 +78,8 @@ function boot(): { sim: Sim; loaded: boolean; migrated?: boolean } {
 const booted = boot();
 let sim = booted.sim;
 sim.sandbox = sandbox;
+// worlds saved before the Red tribe existed meet them now
+if (booted.loaded) sim.ensureRival();
 
 function save(): void {
   if (params.has('nosave')) return;
@@ -129,6 +132,15 @@ const ui = new Ui({
   togglePause,
   cycleSpeed: () => (speed = speed === 1 ? 2 : speed === 2 ? 4 : 1),
   toggleSound: () => audio.toggle(),
+  findRival: () => {
+    const RH = rivalHearth(sim.S);
+    if (!RH) return;
+    rig.fx = RH.x + 0.5;
+    rig.fz = RH.y + 0.5;
+    rig.zoom = Math.min(rig.zoom, 0.45);
+    rig.apply();
+    sim.metRival();
+  },
   helpClosed: () => {
     if (!sim.S.pet) petCard.openChoose();
   },
@@ -346,6 +358,9 @@ function tooltip(): string | null {
     const p = ndc(ptr.x, ptr.y), v = R.villagers.pick(rig.camera, p.x, p.y, p.w, p.h, 16);
     overGrab = !!v || !!pickFlora(ptr.x, ptr.y, hit);
     if (v) {
+      if (v.tribe === 1)
+        return `<b>Red tribe ${v.type === 'resident' ? 'villager' : 'wanderer'}</b><br>` +
+          (inInfluence(S, v.x, v.y) ? 'Grab them and put them down in your land: they will join you' : 'Outside your land. Build homes nearer to win them over');
       const what = v.role === 'settler' ? (v.type === 'resident' ? 'Villager at home' : 'Wanderer') : ROLE_NAME[v.role][0]!.toUpperCase() + ROLE_NAME[v.role].slice(1);
       return `<b>${what}</b><br>Grab to carry. Drop on a building to give a job.`;
     }
@@ -355,12 +370,19 @@ function tooltip(): string | null {
   }
   if (!hit) return null;
   const b = sim.bmap[idx(hit.tx, hit.tz)];
+  if (b?.kind === 'home' && b.tribe === 1) {
+    const r = beliefRate(S, b);
+    return `<b>Red tribe ${BN[b.lv]!.toLowerCase()}</b> · ${Math.floor(b.pop)} villagers<br>Won over: ${Math.floor(b.bel)}%` +
+      `<br>${r > 0.05 ? 'Warming to you' : r > -0.05 ? 'Unsure about you' : 'Not impressed yet'}` +
+      '<br>Big homes and Shrines nearby, festivals, blessings and a kind pet win them over';
+  }
   if (b?.kind === 'home') {
     const f = fields(sim, b.x, b.y);
     return `<b>${BN[b.lv]}</b> · ${Math.floor(b.pop)} of ${BMAX[b.lv]} villagers<br>Open fields ${f} of 25` +
       (b.lv < 5 ? `<br>${BTH[b.lv + 1]} fields to become a ${BN[b.lv + 1]!.toLowerCase()}` : '') +
       (b.tb > 1 ? `<br>Trees nearby: growth +${Math.round((b.tb - 1) * 100)}%` : '');
   }
+  if (b?.kind === 'struct' && b.tribe === 1) return `<b>The Red tribe's Hearth</b><br>${S.rival ? S.rival.joined : 0} of them have joined you so far`;
   if (b?.kind === 'struct') {
     const D = STRUCTS[b.k], n = workersAt(S, b), building = b.prog < 1 ? ` · building ${Math.round(b.prog * 100)}%` : '';
     if (b.k === 'pen')
@@ -375,8 +397,10 @@ function tooltip(): string | null {
 
 let last = performance.now(), fps = 60, statsT = 0, tipT = 0, saveT = 20;
 const showStats = params.has('stats');
+let frameNo = 0;
 
 function frame(now: number): void {
+  frameNo++;
   const rdt = Math.min(0.1, (now - last) / 1000);
   last = now;
   fps += (1 / Math.max(rdt, 1e-3) - fps) * 0.05;
@@ -458,6 +482,11 @@ function frame(now: number): void {
     handTarget: hs.target, handPose: hs.pose, flyers: physics?.poses() ?? [],
   });
   ui.hud(sim.S, rdt);
+  // looking at the Red village counts as meeting them
+  if (!sim.S.hinted.metRival && frameNo % 30 === 0) {
+    const RH = rivalHearth(sim.S);
+    if (RH && tdist(RH.x, RH.y, rig.fx, rig.fz) < 18) sim.metRival();
+  }
   if (!paused) audio.music(rdt, R.sky.night > 0.5, sim.S.fest > 0);
   petCard.update(sim.S, rdt);
   if ((tipT -= rdt) <= 0) {

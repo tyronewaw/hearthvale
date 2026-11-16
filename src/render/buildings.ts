@@ -7,14 +7,14 @@ import { hash2 } from '../sim/rng';
 import { N, tdist, wd, type State } from '../sim/world';
 import { bent } from './bend';
 import { castsShadow, worldMat } from './materials';
-import { crystalGeo, flameGeo, homeModels, scaffoldGeo, structModels, totemGeo, tuftGeo, type Model } from './models';
+import { TRIBE_BLUE, TRIBE_RED, crystalGeo, flameGeo, homeModels, pennantGeo, scaffoldGeo, structModels, totemGeo, tuftGeo, type Model } from './models';
 import type { Particles } from './particles';
 import { surfaceY } from './scale';
 
 const CROP = ['#96d06c', '#62a446', '#e4c65c', null];
 const SOIL = ['#88623e', '#88623e', '#8a6440', '#d6d4dc'];
 const m4 = new Matrix4(), l4 = new Matrix4(), q4 = new Quaternion(), v3 = new Vector3(), s3 = new Vector3(), up = new Vector3(0, 1, 0);
-const tmpC = new Color();
+const tmpC = new Color(), BLUE_C = new Color(TRIBE_BLUE[0]), RED_C = new Color(TRIBE_RED[0]), sway = new Quaternion();
 
 function poolTexture(): CanvasTexture {
   const c = document.createElement('canvas');
@@ -64,6 +64,8 @@ export class Buildings {
   private soil: InstancedMesh;
   private tufts: InstancedMesh;
   private totem: Mesh;
+  /** A tribe pennant on every home (red ones turn blue as they're won over) and on the Red Hearth. */
+  private pennants: InstancedMesh;
   private ghost: Mesh;
   private ghostMat: MeshLambertMaterial;
   private ghostKind: StructKind | null = null;
@@ -88,6 +90,7 @@ export class Buildings {
     this.crystals = im(scene, crystalGeo(), bent(new MeshBasicMaterial({ vertexColors: true })), 64, false);
     this.soil = im(scene, new BoxGeometry(0.86, 0.03, 0.86), worldMat(new MeshLambertMaterial({ flatShading: true })), N * N / 2, false);
     this.tufts = im(scene, tuftGeo(), worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true })), N * N * 2, false);
+    this.pennants = im(scene, pennantGeo(), worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true })), N * N / 8 + 64, false);
     this.totem = new Mesh(totemGeo(), mat);
     castsShadow(this.totem);
     this.totem.frustumCulled = false;
@@ -115,7 +118,7 @@ export class Buildings {
 
   update(S: State, crops: Set<number>, fx: number, fz: number, time: number, dt: number, night: number, season: number): void {
     const counts = new Array(6).fill(0);
-    let ng = 0, np = 0, nf = 0, nc = 0, nsc = 0;
+    let ng = 0, np = 0, nf = 0, nc = 0, nsc = 0, npn = 0;
     const sc: Record<string, number> = {};
     const view = 70; // only emit smoke near the camera
     const addGlows = (model: Model, base: Matrix4) => {
@@ -146,6 +149,10 @@ export class Buildings {
         this.pools.setMatrixAt(np++, l4);
       }
       smoke(b.id, model, base, b.x + 0.5, b.y + 0.5);
+      sway.setFromAxisAngle(up, Math.sin(time * 1.7 + b.id) * 0.5 + b.id);
+      l4.compose(v3.set(0, model.h - 0.12, 0), sway, s3.setScalar(1)).premultiply(base);
+      this.pennants.setMatrixAt(npn, l4);
+      this.pennants.setColorAt(npn++, b.tribe === 1 ? tmpC.copy(RED_C).lerp(BLUE_C, b.bel / 100) : BLUE_C);
     }
 
     let nearHearth: Vector3 | null = null, hd = 1e9;
@@ -162,6 +169,12 @@ export class Buildings {
         continue;
       }
       if (night > 0.05) addGlows(model, base);
+      if (s.tribe === 1) {
+        sway.setFromAxisAngle(up, Math.sin(time * 1.3 + s.id) * 0.4);
+        l4.compose(v3.set(0.45, 0, -0.45), sway, s3.setScalar(2.2)).premultiply(base);
+        this.pennants.setMatrixAt(npn, l4);
+        this.pennants.setColorAt(npn++, RED_C);
+      }
       if (model.fire) {
         const fl = 1 + Math.sin(time * 13 + s.id) * 0.12 + Math.sin(time * 7.3) * 0.08;
         l4.compose(v3.set(...model.fire), q4.identity(), s3.set(fl, fl * (1.1 + Math.sin(time * 9) * 0.15), fl)).premultiply(base);
@@ -191,10 +204,11 @@ export class Buildings {
       this.structs[k].count = sc[k] ?? 0;
       this.structs[k].instanceMatrix.needsUpdate = true;
     }
-    for (const [m, n] of [[this.scaffold, nsc], [this.glow, ng], [this.pools, np], [this.flames, nf], [this.crystals, nc]] as const) {
+    for (const [m, n] of [[this.scaffold, nsc], [this.glow, ng], [this.pools, np], [this.flames, nf], [this.crystals, nc], [this.pennants, npn]] as const) {
       m.count = n;
       m.instanceMatrix.needsUpdate = true;
     }
+    if (this.pennants.instanceColor) this.pennants.instanceColor.needsUpdate = true;
     this.glowMat.opacity = Math.min(1, night * 1.2);
     this.poolMat.opacity = night * 0.55;
     if (nearHearth) {

@@ -62,6 +62,9 @@ export function clamp(v: number, a: number, b: number): number {
   return v < a ? a : v > b ? b : v;
 }
 
+/** 0 is our (blue) tribe, 1 the Red tribe, who are won over rather than fought. */
+export type Tribe = 0 | 1;
+
 /** A home: grows from tepee (0) to great lodge (5) with the flat land around it. */
 export interface Home {
   kind: 'home';
@@ -73,6 +76,9 @@ export interface Home {
   pop: number;
   /** Growth bonus from nearby trees (1 = none). */
   tb: number;
+  tribe: Tribe;
+  /** How won over a Red home is (0..100); it joins us at 100. */
+  bel: number;
 }
 
 /** A work building, or a construction site while prog < 1. */
@@ -85,6 +91,7 @@ export interface Struct {
   prog: number;
   /** Seconds of fertiliser left (doubles a farm's yield). */
   fert: number;
+  tribe: Tribe;
 }
 
 export type VillType = 'settler' | 'resident' | 'worker';
@@ -107,7 +114,8 @@ export interface Vill {
   ty: number;
   think: number;
   blocked: number;
-  /** Clothing shade (tribe blue) and skin tone indices. */
+  tribe: Tribe;
+  /** Clothing shade (in the tribe's colour) and skin tone indices. */
   c: number;
   sk: number;
   /** Heading in radians (atan2 of movement in x/y). */
@@ -182,6 +190,17 @@ export interface State {
   q: number;
   /** Quest-chain version `q` refers to (QUEST_VERSION). */
   qv: number;
+  /** The Red tribe: null until it arrives (new worlds have it from the start). */
+  rival: Rival | null;
+}
+
+export interface Rival {
+  /** Villagers (and homes' people) won over so far. */
+  joined: number;
+  /** Every Red home and villager has joined us. */
+  united: boolean;
+  /** Seconds until the Red elder next smooths some land for them. */
+  elder: number;
 }
 
 export const season = (t: number): number => Math.floor(t / DAY / 3) % 4;

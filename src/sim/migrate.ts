@@ -70,10 +70,10 @@ export function migrateV2(json: string): State | null {
 
   // Entities, with fresh ids; old struct indices map to new ids.
   S.uid = 1;
-  S.homes = o.homes.map((b): Home => ({ kind: 'home', id: S.uid++, x: wrap(b.x + OFF), y: wrap(b.y + OFF), lv: b.lv, pop: b.pop, tb: 1 }));
+  S.homes = o.homes.map((b): Home => ({ kind: 'home', id: S.uid++, x: wrap(b.x + OFF), y: wrap(b.y + OFF), lv: b.lv, pop: b.pop, tb: 1, tribe: 0, bel: 0 }));
   const sid: number[] = [];
   S.structs = o.structs.filter((s) => KINDS.includes(s.k as StructKind)).map((s, i): Struct => {
-    const st: Struct = { kind: 'struct', id: S.uid++, k: s.k as StructKind, x: wrap(s.x + OFF), y: wrap(s.y + OFF), prog: s.prog, fert: s.fert ?? 0 };
+    const st: Struct = { kind: 'struct', id: S.uid++, k: s.k as StructKind, x: wrap(s.x + OFF), y: wrap(s.y + OFF), prog: s.prog, fert: s.fert ?? 0, tribe: 0 };
     sid[i] = st.id;
     return st;
   });
@@ -82,7 +82,7 @@ export function migrateV2(json: string): State | null {
     const role = ROLES.includes(v.role as RoleId) ? (v.role as RoleId) : 'settler';
     return {
       id: S.uid++, type: job !== null ? 'worker' : 'settler', role: job !== null ? role : 'settler', job, home: null,
-      x, y, px: x, py: y, tx: x, ty: y, think: 0, blocked: 0, c: v.c | 0, sk: v.sk | 0, face: 0, st: '', t: 0, dizzy: 0,
+      x, y, px: x, py: y, tx: x, ty: y, think: 0, blocked: 0, tribe: 0, c: v.c | 0, sk: v.sk | 0, face: 0, st: '', t: 0, dizzy: 0,
       wave: 0, mv: false, spot: null, spotT: 0, carry: 0, goal: null, chop: null, plant: null,
     };
   });

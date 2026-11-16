@@ -56,6 +56,7 @@ export function emptyState(seed: number): State {
     poos: [],
     q: 0,
     qv: QUEST_VERSION,
+    rival: null,
   };
 }
 
@@ -159,8 +160,8 @@ export function landmasses(S: State): number[][] {
   return out.sort((a, b) => b.length - a.length);
 }
 
-function pickStart(S: State, R: Rng): [number, number] {
-  // Distance from each tile to the nearest water tile (multi-source BFS, wrapping).
+/** Distance from each tile to the nearest water tile (multi-source BFS, wrapping). */
+export function waterDist(S: State): Int16Array {
   const dw = new Int16Array(N * N).fill(-1), queue: number[] = [];
   for (let t = 0; t < N * N; t++)
     if (isWater(S, t % N, (t / N) | 0)) {
@@ -177,6 +178,11 @@ function pickStart(S: State, R: Rng): [number, number] {
       }
     }
   }
+  return dw;
+}
+
+function pickStart(S: State, R: Rng): [number, number] {
+  const dw = waterDist(S);
   const big = landmasses(S)[0];
   if (!big) return [N / 2, N / 2];
   let best = big[0]!, bs = -1e9;

@@ -11,6 +11,16 @@ const WATTLE = ['#b98d5c', '#9b7147', '#77522f'];
 const POLE = '#6b4426', DOOR = '#3a2418', STONE = '#9a9284', STONE2 = '#b3ab9c', WOOD = '#8a5a30', LOG_END = '#e0bc88';
 /** Our tribe is blue (the user's choice): flags and trims use the prototype's TRIBE blues. */
 export const TRIBE_BLUE = ['#3f6fc4', '#3566b0', '#4a7fd6', '#2f5ea8'];
+/** The Red tribe wears terracotta (the user's choice). */
+export const TRIBE_RED = ['#c4573f', '#b04a35', '#d6694d', '#a8442f'];
+
+/** A small tribe pennant (white cloth, tinted per instance; the pole stays dark). */
+export function pennantGeo(): BufferGeometry {
+  const k = new Kit();
+  k.add(new CylinderGeometry(0.012, 0.012, 0.34, 4), '#3a2a20', { pos: [0, 0.17, 0] });
+  k.add(new BoxGeometry(0.17, 0.1, 0.012), '#ffffff', { pos: [0.09, 0.28, 0] });
+  return k.build();
+}
 
 /** A model plus the spots that light up at night and where smoke and fire come from. */
 export interface Model {

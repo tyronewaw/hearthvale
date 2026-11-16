@@ -57,6 +57,31 @@ export const BALANCE = {
   trickCooldown: 110,
   /** A pet's Build trick adds this much progress to a building site (×1.4 when grand). */
   petBuild: 0.25,
+  /** The Red tribe (phase 10): they settle within rivalRange of their Hearth, at least rivalMinDist from our start. */
+  rivalRange: 14,
+  rivalMinDist: 40,
+  /** They stop growing at this many people, keep at most this many wanderers, and grow at this rate (they never go hungry). */
+  rivalMax: 160,
+  rivalSettlers: 24,
+  rivalGrowth: 0.85,
+  /** Seconds between their elder smoothing a patch of land for them. */
+  rivalElderEvery: 40,
+  /**
+   * Winning a Red home over (0..100 belief), per second: each of our homes within belNear tiles
+   * adds belHome × (level + 1) × closeness, each of our Shrines belShrine, a festival belFest;
+   * they lose belDecay, and belCore more within 6 tiles of their own Hearth.
+   */
+  belNear: 12,
+  belHome: 0.05,
+  belShrine: 0.2,
+  belFest: 0.6,
+  belDecay: 0.1,
+  belCore: 0.15,
+  /** One-off belief: a blessing within its radius + 4, the pet dancing, playing or casting nearby, or its mischief (negative). */
+  impressBless: 15,
+  impressPet: 6,
+  /** Chance per second that a Red wanderer inside our land joins us. */
+  rivalWanderJoin: 0.02,
   /** Blessing durations (proto). */
   rainSeconds: 25,
   festSeconds: 40,

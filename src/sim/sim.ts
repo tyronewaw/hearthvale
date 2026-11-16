@@ -8,10 +8,11 @@ import {
   PETS, feedPet, fixPet, mkPet, petCatch, stepPet, stepPoos, teach, watchLearn, type Habit, type Leash, type PetCtx, type PetKind,
 } from './pet';
 import { Rng } from './rng';
+import { festivalImpress, fixTribes, spawnRival, stepRival } from './rival';
 import { bump, isWater, level, rise } from './terrain';
 import {
-  builtPen, calcCrops, destroyHome, grabFlora, grabVillager, land, mkV, placeStruct, popCount, rebuildMap, recheck,
-  roleCount, spark, stepV, syncResidents, validSite, finish, type Ctx,
+  blueHomes, builtPen, calcCrops, destroyHome, grabFlora, grabVillager, impress, land, mkV, placeStruct, popCount, rebuildMap, recheck,
+  roleCount, spark, stepV, syncResidents, tribePop, validSite, finish, type Ctx,
 } from './village';
 import { generateWorld } from './worldgen';
 import {
@@ -19,6 +20,8 @@ import {
 } from './world';
 
 export type { SimEvent } from './events';
+
+const B_IMPRESS = BALANCE.impressBless;
 export { TOOLS, type ToolId } from './defs';
 
 /**
@@ -37,9 +40,10 @@ export class Sim implements Ctx, PetCtx {
   handGround: [number, number] | null = null;
   private lastSeason: number;
   /** Countdown timers (not saved, as in the prototype's `tm`). */
-  private tm = { spread: 0, re: 0, res: 0, q: 0 };
+  private tm = { spread: 0, re: 0, res: 0, q: 0, rival: 0 };
 
   constructor(S: State) {
+    fixTribes(S);
     this.S = S;
     this.rng = new Rng(S.rngState);
     if (S.pet) {
@@ -59,8 +63,19 @@ export class Sim implements Ctx, PetCtx {
     placeStruct(sim, 'hearth', sx, sy, 1);
     for (let i = 0; i < 5; i++) sim.S.vills.push(mkV(sim, 'settler', sx + 0.5 + Math.cos(i * 1.3) * 1.6, sy + 0.5 + Math.sin(i * 1.3) * 1.6));
     recheck(sim);
+    spawnRival(sim, false);
     sim.drain();
     return sim;
+  }
+
+  /** Older saves meet the Red tribe on load (once: a planet with no room for them never gets them). */
+  ensureRival(): void {
+    if (!this.S.rival && !this.S.hinted.noRival && !spawnRival(this, true)) this.S.hinted.noRival = 1;
+  }
+
+  /** The player has looked at the Red village (the "Neighbours" quest). */
+  metRival(): void {
+    this.S.hinted.metRival = 1;
   }
 
   emit(e: SimEvent): void {
@@ -89,7 +104,7 @@ export class Sim implements Ctx, PetCtx {
     const pop = popCount(S);
     S.popNow = pop;
     S.faith = clamp(S.faith + (B.faithBase + pop * B.faithPerPop) * dt, 0, 999);
-    S.food = clamp(S.food + (B.foodBase + B.foodPerHome * S.homes.length - B.foodEatPerPop * pop) * dt, 0, 999);
+    S.food = clamp(S.food + (B.foodBase + B.foodPerHome * blueHomes(S) - B.foodEatPerPop * pop) * dt, 0, 999);
     S.wood = Math.min(999, S.wood);
     for (const r of S.rains) r.t -= dt;
     S.rains = S.rains.filter((r) => r.t > 0);
@@ -118,18 +133,29 @@ export class Sim implements Ctx, PetCtx {
       S.hinted.food = 1;
       this.emit({ k: 'toast', msg: 'Food is running low, so homes grow slowly. Build a Farm or Fishing hut' });
     }
-    let settlers = S.vills.reduce((n, v) => n + (v.type === 'settler' ? 1 : 0), 0);
+    // (the Red tribe never goes hungry, grows a little slower and stops at rivalMax people)
+    const wand = [0, 0], cap = [B.maxSettlers, B.rivalSettlers];
+    for (const v of S.vills) if (v.type === 'settler') wand[v.tribe]!++;
+    const smRed = B.growSeason[se]! * B.rivalGrowth, redFull = S.rival && !S.rival.united ? tribePop(S, 1) >= B.rivalMax : true;
     for (const b of S.homes) {
-      b.pop += homeGrowth(S, b, sm) * dt;
+      if (b.tribe === 1 && redFull) continue;
+      b.pop += homeGrowth(S, b, b.tribe === 1 ? smRed : sm) * dt;
       if (b.pop >= BMAX[b.lv]!) {
         const out = Math.max(1, Math.floor(BMAX[b.lv]! / 2));
-        if (settlers + out <= B.maxSettlers) {
-          settlers += out;
+        if (wand[b.tribe]! + out <= cap[b.tribe]!) {
+          wand[b.tribe]! += out;
           b.pop -= out;
           for (let k = 0; k < out; k++)
-            S.vills.push(mkV(this, 'settler', b.x + 0.5 + (this.rng.next() - 0.5) * 0.6, b.y + 0.8 + (this.rng.next() - 0.5) * 0.3));
+            S.vills.push(mkV(this, 'settler', b.x + 0.5 + (this.rng.next() - 0.5) * 0.6, b.y + 0.8 + (this.rng.next() - 0.5) * 0.3, { tribe: b.tribe }));
         } else b.pop = BMAX[b.lv]!;
       }
+    }
+    const settlers = wand[0]!;
+
+    // The Red tribe (once a second)
+    if ((this.tm.rival -= dt) <= 0) {
+      this.tm.rival = 1;
+      stepRival(this, 1);
     }
 
     // The pet and its droppings
@@ -173,7 +199,7 @@ export class Sim implements Ctx, PetCtx {
         }
       }
     }
-    if (!S.hinted.flat && settlers >= 5 && S.homes.length <= 2 && S.t > 150 * 0.5) {
+    if (!S.hinted.flat && settlers >= 5 && blueHomes(S) <= 2 && S.t > 150 * 0.5) {
       S.hinted.flat = 1;
       this.emit({ k: 'toast', msg: 'Wanderers need flat land. Raise or lower ground into level patches' });
     }
@@ -217,6 +243,9 @@ export class Sim implements Ctx, PetCtx {
         festival(this);
         this.emit({ k: 'toast', msg: 'Festival! Every home grows twice as fast' });
       }
+      // blessings near the Red tribe impress them
+      if (id === 'fest') festivalImpress(this);
+      else impress(this, vx, vy, def.r + 4, B_IMPRESS);
       this.emit({ k: 'sfx', id: 'magic' });
       // the pet watches and learns
       if (S.pet) watchLearn(this, id, id === 'fest' ? S.pet.x : vx, id === 'fest' ? S.pet.y : vy);
@@ -232,8 +261,11 @@ export class Sim implements Ctx, PetCtx {
     this.pay(def.cost);
     this.reshape(touched);
     this.emit({ k: 'sfx', id: id === 'raise' ? 'up' : id === 'lower' ? 'down' : 'magic' });
-    // the pet watches Level and Rise too
-    if (S.pet && (id === 'flat' || id === 'isle')) watchLearn(this, id, vx, vy);
+    // the pet watches Level and Rise too, and so do the Red tribe
+    if (id === 'flat' || id === 'isle') {
+      if (S.pet) watchLearn(this, id, vx, vy);
+      impress(this, vx, vy, def.r + 4, B_IMPRESS);
+    }
     return true;
   }
 

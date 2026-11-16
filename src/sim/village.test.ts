@@ -178,8 +178,8 @@ describe('jobs and production', () => {
 describe('a fresh world', () => {
   it('starts with a Hearth and five settlers, who found homes on their own', () => {
     const sim = Sim.newWorld(42);
-    expect(sim.S.structs.filter((s) => s.k === 'hearth')).toHaveLength(1);
-    expect(sim.S.vills).toHaveLength(5);
+    expect(sim.S.structs.filter((s) => s.k === 'hearth' && s.tribe === 0)).toHaveLength(1);
+    expect(sim.S.vills.filter((v) => v.tribe === 0)).toHaveLength(5);
     run(sim, DAY * 2);
     expect(sim.S.homes.length).toBeGreaterThan(0);
     expect(sim.S.popNow).toBeGreaterThanOrEqual(5);

@@ -57,7 +57,8 @@ describe('migrating a prototype (v2) save', () => {
     expect(S.pet!.tricks).toEqual(['bloom']);
     expect(S.pet!.w.help).toBe(3);
     expect(S.pet!.x).toBeCloseTo(31.5 + OFF);
-    expect([S.faith, S.food, S.wood, S.q, S.best]).toEqual([321, 55, 77, 7, 140]);
+    expect([S.faith, S.food, S.wood, S.best]).toEqual([321, 55, 77, 140]);
+    expect(QUESTS[S.q]!.id).toBe('timber'); // the prototype's 8th quest, wherever it sits in today's chain
     expect(S.stat.strokes).toBe(3);
     expect(S.totem).toEqual([25 + OFF, 26 + OFF]);
     expect(S.q).toBeLessThan(QUESTS.length);

@@ -8,7 +8,7 @@ import { BALANCE } from './balance';
 import { bloom, festival, rain } from './blessings';
 import { BMAX, STRUCTS } from './defs';
 import { isWater, setVertices, tileFlat } from './terrain';
-import { builtPen, findTile, finish, hearth, homeById, mkV, nearWater, spark, structById, type Ctx } from './village';
+import { builtPen, findTile, finish, hearth, homeById, impress, mkV, nearWater, spark, structById, type Ctx } from './village';
 import { clamp, idx, nightF, tdist, wd, wrap, type Held, type State, type Vill } from './world';
 
 export type PetKind = 'sheep' | 'monkey' | 'chicken';
@@ -506,6 +506,9 @@ export function finishAct(c: PetCtx, a: PetAct): 'keep' | void {
     spark(c, P.x, P.y, 'bang', 1);
   } else if (a.id === 'poop') S.poos.push({ x: P.x, y: P.y, t: 30 });
   P.xp += a.id === 'eat' ? 3 : 2;
+  // the Red tribe notice: a kind pet impresses them, a naughty one puts them off
+  if (a.id === 'dance' || a.id === 'play' || (a.id === 'trick' && P.trickCD === BALANCE.trickCooldown)) impress(c, P.x, P.y, 6, BALANCE.impressPet);
+  else if (a.id === 'mischief') impress(c, P.x, P.y, 6, -BALANCE.impressPet);
   if ((HABITS as readonly string[]).includes(a.id)) P.last = { id: a.id as Habit, t: S.t };
   if (msg) toast(c, msg);
 }
