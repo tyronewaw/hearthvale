@@ -150,7 +150,7 @@ export class Buildings {
       }
       smoke(b.id, model, base, b.x + 0.5, b.y + 0.5);
       sway.setFromAxisAngle(up, Math.sin(time * 1.7 + b.id) * 0.5 + b.id);
-      l4.compose(v3.set(0, model.h - 0.12, 0), sway, s3.setScalar(1)).premultiply(base);
+      l4.compose(v3.set(0, model.h - 0.14, 0), sway, s3.setScalar(1.35)).premultiply(base);
       this.pennants.setMatrixAt(npn, l4);
       this.pennants.setColorAt(npn++, b.tribe === 1 ? tmpC.copy(RED_C).lerp(BLUE_C, b.bel / 100) : BLUE_C);
     }
