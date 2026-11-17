@@ -142,13 +142,13 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 | `monkey_call_1.wav` | Ook! Eee! | cheeky call |
 | `monkey_call_2.wav` | Eek-eek! | quick, squeaky call |
 | `monkey_eat_1.wav` | Nom nom, ook! | munching |
-| `monkey_eat_2.wav` | Mm-mm-mm! | yummy humming |
+| `monkey_eat_2.wav` | Mm-mm, nom! | yummy humming |
 | `monkey_play_1.wav` | Ooh-ooh-aah-aah! | excited monkey hoots |
 | `monkey_play_2.wav` | Eee-hee! | playful squeal |
 | `monkey_sleep_1.wav` | Hwaaa... ook. | sleepy yawn |
 | `monkey_sleep_2.wav` | Mm... ooo. | drowsy murmur |
 | `monkey_cheer_1.wav` | Ooh-ooh! Aah-aah! | triumphant hoots |
-| `monkey_cheer_2.wav` | Eeee! | joyful screech |
+| `monkey_cheer_2.wav` | Eee-eee-eee! | joyful screech |
 
 ## chicken
 
@@ -160,8 +160,8 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 | `chicken_happy_2.wav` | Cluck, cluck! | content clucks |
 | `chicken_sad_1.wav` | Buk... bwk. | sad, droopy cluck |
 | `chicken_sad_2.wav` | Bawww... | sulky cluck |
-| `chicken_call_1.wav` | Bawk! | short, bright squawk |
-| `chicken_call_2.wav` | Buk-buk! | quick clucks |
+| `chicken_call_1.wav` | Ba-gawk! | short, bright squawk |
+| `chicken_call_2.wav` | Cluck-cluck! | quick clucks |
 | `chicken_eat_1.wav` | Pek pek pek! | pecking and clucking |
 | `chicken_eat_2.wav` | Nom, buk! | munching cluck |
 | `chicken_play_1.wav` | Bukaaw! Buk! | excited clucking |
