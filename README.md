@@ -24,6 +24,7 @@ It is being rebuilt in phases, and each phase ends playable.
 14. ✅ Bigger buildings: work buildings take 2×2 tiles, and a great lodge stands in its own palisaded compound
 15. ✅ Villager voices: they chatter, cheer, squeal when thrown and celebrate in their own made-up language (5 voices, 48 lines, made with the open VoxCPM2 model)
 16. ✅ Pet sounds: your sheep bleats, your monkey hoots and your hen clucks when stroked, scolded, fed, playing, sleepy or proud; babies squeak and grand old pets sound deeper
+17. ✅ Real animal sounds: your sheep and hen now use real farm recordings (public domain); the monkey keeps its cartoon voice
 18. ✅ A Black & White / Populous feel: smooth painted hills, warmer light and a glowing sky, and new villagers, huts, god hand, trees and pets made in Blender
 
 ## Controls (so far)

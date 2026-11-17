@@ -10,8 +10,10 @@ become the pet's seven sounds, two takes each:
 The game then pitches every clip by the pet's growth stage, so a baby squeaks higher.
 
 usage: python animals.py <sources.json> <out dir> [ast model dir]
-sources.json lists each recording (title, file relative to it, licence...) as fetched from
-Wikimedia Commons; SPECIES below says which recordings belong to which pet.
+sources.json lists each recording (title, file relative to it, licence, artist, page...), from
+Wikimedia Commons (titles "File:...") or iNaturalist (titles "File:iNat <taxon> <sound id>");
+SPECIES below says which recordings belong to which pet, by title prefix. The shipped sheep and
+hen clips come from the recordings in voices/animal-sources.json; the monkey stays a cartoon voice.
 Writes <out>/<kind>_<ev>_<n>.wav and <out>/report.txt; then `npm run voices -- <out>`.
 """
 import json

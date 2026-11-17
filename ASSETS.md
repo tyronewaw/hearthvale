@@ -27,8 +27,26 @@ Every third-party asset shipped with the game is listed here. Only add CC0 asset
 - **Processing:** `npm run voices` trims, levels and converts the clips.
 
 ## Pet sounds (`src/assets/voices/{sheep,monkey,chicken}_*.ogg`)
-- Made the same way as the villager voices: VoxCPM2 (Apache-2.0), by Claude in the cloud, at the project owner's request.
-- Each pet is a cartoon voice *designed* from a text description and its own noises, not an animal or a person recorded anywhere. Its reference is in `voices/refs/`.
+- **Sheep and hen: real animals** (phase 17, the owner's pick). Each clip was cut from a public-domain field recording on
+  Wikimedia Commons, by `scripts/voicegen/animals.py`. Some clips were also re-pitched, muffled or joined. The originals came
+  from pdsounds.org; the full list with links is in `voices/animal-sources.json`.
+
+  | Recording | Recordist | Licence | Used for |
+  |---|---|---|---|
+  | [Sheep bleating](https://commons.wikimedia.org/wiki/File:Sheep_bleating.ogg) | earthcalling | Public domain | sheep |
+  | [Corner of a sheep field in summer](https://commons.wikimedia.org/wiki/File:Corner_of_a_sheep_field_in_summer.ogg) | earthcalling | Public domain | sheep |
+  | [Herd of goats bleating](https://commons.wikimedia.org/wiki/File:Herd_of_goats_bleating.ogg) | stephan | Public domain | sheep |
+  | [Hens leaving coop](https://commons.wikimedia.org/wiki/File:Hens_leaving_coop.ogg) | alys | Public domain | hen |
+  | [Small rooster crowing](https://commons.wikimedia.org/wiki/File:Small_rooster_crowing.ogg) | alys | Public domain | hen (cheer) |
+
+  The cutter checks each call with an AudioSet sound classifier (MIT/ast-finetuned-audioset-10-10-0.4593, BSD-3-Clause). The
+  classifier is only used for checking and is not shipped.
+- **Monkey: a cartoon voice** (the owner's pick: real sheep and hen, cartoon monkey). It was made the same way as the villager
+  voices: VoxCPM2 (Apache-2.0), by Claude in the cloud, at the project owner's request. It is *designed* from a text
+  description and its own noises, not a recorded animal or person. Its reference is in `voices/refs/`.
+- **Real monkeys, if wanted later:** openly licensed wild recordings exist on [iNaturalist](https://www.inaturalist.org)
+  (capuchins, spider monkeys, gibbons; CC0 or CC BY 4.0 per sound). `animals.py` can cut them, but CC-BY ones need their
+  recordists credited here.
 
 ## Code dependencies
 three (MIT), @dimforge/rapier3d-compat (Apache-2.0), vite (MIT), vite-plugin-pwa and Workbox (MIT), vitest (MIT), typescript (Apache-2.0).
