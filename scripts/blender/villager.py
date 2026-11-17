@@ -25,13 +25,13 @@ W = "#ffffff"
 def legs():
     # a leg hanging from the hip, a little knee, and a foot pointing forward (-y in Blender)
     a = part(lathe([(0, 0.005), (0.034, 0.0), (0.033, -0.05), (0.028, -0.085), (0.024, -0.13), (0.022, -0.152), (0, -0.158)], 8), W, name="leg")
-    b = part(sphere(0.034, 8, 5), "#6e4c36", loc=(0, -0.017, -0.156), scale=(0.95, 1.45, 0.55), name="foot")
+    b = part(sphere(0.034, 6, 4), "#6e4c36", loc=(0, -0.017, -0.156), scale=(0.95, 1.45, 0.55), name="foot")
     return [a, b]
 
 
 def arms():
     a = part(lathe([(0, 0.012), (0.03, 0.006), (0.03, -0.04), (0.025, -0.08), (0.021, -0.13), (0, -0.14)], 8), W, name="arm")
-    b = part(sphere(0.029, 8, 5), W, loc=(0, -0.004, -0.15), scale=(1, 0.9, 1.15), name="hand")
+    b = part(sphere(0.029, 6, 4), W, loc=(0, -0.004, -0.15), scale=(1, 0.9, 1.15), name="hand")
     return [a, b]
 
 
@@ -53,10 +53,10 @@ def belt():
 def head():
     out = [part(sphere(0.077, 10, 7), W, scale=(1, 0.96, 1.0), name="head")]
     for s in (-1, 1):
-        out.append(part(sphere(0.012, 6, 4), "#1c1410", loc=(s * 0.028, -0.07, 0.008), scale=(1, 0.6, 1.2), name="eye"))
-        out.append(part(sphere(0.019, 6, 4), "#eeeeee", loc=(s * 0.077, 0.004, -0.002), scale=(0.45, 1, 1.05), name="ear"))
-    out.append(part(sphere(0.017, 6, 4), "#f2f2f2", loc=(0, -0.078, -0.014), scale=(1, 1, 1.15), name="nose"))
-    out.append(part(sphere(0.014, 6, 3), "#5a2a1e", loc=(0, -0.071, -0.04), scale=(1.4, 0.4, 0.45), name="mouth"))
+        out.append(part(sphere(0.012, 5, 3), "#1c1410", loc=(s * 0.028, -0.07, 0.008), scale=(1, 0.6, 1.2), name="eye"))
+        out.append(part(sphere(0.019, 5, 3), "#eeeeee", loc=(s * 0.077, 0.004, -0.002), scale=(0.45, 1, 1.05), name="ear"))
+    out.append(part(sphere(0.017, 5, 3), "#f2f2f2", loc=(0, -0.078, -0.014), scale=(1, 1, 1.15), name="nose"))
+    out.append(part(sphere(0.014, 5, 3), "#5a2a1e", loc=(0, -0.071, -0.04), scale=(1.4, 0.4, 0.45), name="mouth"))
     return out
 
 
@@ -67,7 +67,7 @@ def hair():
     n = Vector((0, -0.45, 1)).normalized()
     bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0.012), plane_no=n, clear_inner=True)
     a = part(bm, W, loc=(0, -0.002, -0.068), scale=(1.06, 1.08, 1.0), name="hair")
-    b = part(sphere(0.026, 6, 4), "#dddddd", loc=(0, 0.04, 0.018), scale=(1, 1, 0.9), name="knot")
+    b = part(sphere(0.026, 5, 3), "#dddddd", loc=(0, 0.04, 0.018), scale=(1, 1, 0.9), name="knot")
     return [a, b]
 
 

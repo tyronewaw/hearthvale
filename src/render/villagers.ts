@@ -96,7 +96,7 @@ const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 
 const one = new Vector3(1, 1, 1);
 
 /** Villagers nearer the camera than this get the rounded Blender-made bodies (up to FINE_CAP of them). */
-const FINE_R = 16, FINE_CAP = 300;
+const FINE_R = 13, FINE_CAP = 160;
 
 /** One villager's body parts: simple boxes, or the rounded close-up ones. */
 interface Body {

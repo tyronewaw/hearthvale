@@ -5,7 +5,9 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { hash2 } from '../sim/rng';
 import { CHUNK, CHUNKS, N, idx, wd, type State } from '../sim/world';
+import { blendGeo } from './blendmodels';
 import { castsShadow, worldMat } from './materials';
+import treeFile from '../assets/models/trees.json';
 import type { Quality } from './quality';
 import { surfaceY } from './scale';
 
@@ -92,10 +94,16 @@ export class Flora {
     const cap = (N * N) / 3;
     const leafMat = worldMat(new MeshLambertMaterial({ flatShading: true }));
     const barkMat = worldMat(new MeshLambertMaterial({ color: '#7a4b2a', flatShading: true }));
-    const trunks = [trunk(0.5), trunk(0.3), trunk(0.12)];
-    [canopyLeafy(), canopyPine(), canopyBush()].forEach((g, i) => {
-      const canopy = new InstancedMesh(g, leafMat, cap);
-      const tr = new InstancedMesh(trunks[i]!, barkMat, cap);
+    // Near trees: rounded, lumpy crowns and bushes made in Blender (scripts/blender/trees.py),
+    // smooth-shaded and lighter on top; pines keep their crisp code-built tiers.
+    const softLeaf = worldMat(new MeshLambertMaterial({ vertexColors: true }));
+    const softBark = worldMat(new MeshLambertMaterial({ vertexColors: true }));
+    const made = (k: string) => blendGeo(treeFile, k);
+    const canopies = [made('canopy0') ?? canopyLeafy(), canopyPine(), made('canopy2') ?? canopyBush()];
+    const trunks = [made('trunk0') ?? trunk(0.5), made('trunk1') ?? trunk(0.3), made('trunk2') ?? trunk(0.12)];
+    canopies.forEach((g, i) => {
+      const canopy = new InstancedMesh(g, g.getAttribute('color') ? softLeaf : leafMat, cap);
+      const tr = new InstancedMesh(trunks[i]!, trunks[i]!.getAttribute('color') ? softBark : barkMat, cap);
       const far = new InstancedMesh(farCanopy(i), leafMat, cap);
       for (const m of [canopy, tr, far]) {
         m.frustumCulled = false;

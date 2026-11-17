@@ -74,19 +74,19 @@ def roof_profile(rr: float, top: float, roofH: float, tiers: int) -> list[tuple[
 
 def hut(r, wallH, roofH, roof, posts, ropes, sx, tier, lod):
     pal = ROOFS[roof]
-    seg = 9 if lod else max(10, round(r * 26))
+    seg = 7 if lod else max(9, round(r * 21))
     y0 = 0.06
     round_parts = []
     out = []
     seed = r * 31 + wallH * 7
     # plinth: a ring of rough stones
     if not lod:
-        bm = lathe([(0, 0.07), (r * 1.03, 0.072), (r * 1.1, 0.052), (r * 1.13, 0.012), (r * 1.1, 0)], seg * 2)
+        bm = lathe([(0, 0.07), (r * 1.06, 0.07), (r * 1.13, 0.03), (r * 1.1, 0)], seg * 2)
         lumpy(bm, 0.012, 22, seed)
         stone = lambda c, n: STONES[(int((ang(c) + math.pi) / math.tau * seg * 2) + int(c.z * 40)) % 4]
         round_parts.append(part(bm, stone, smooth=False, name="plinth"))
     # wall: woven wattle, bulging a little, darker at the foot
-    rows = 3 if lod else 6
+    rows = 2 if lod else 4
     prof = [(r * (0.99 + 0.02 * math.sin(math.pi * i / rows)) - (0.03 * r if i == rows else 0), y0 + wallH * i / rows) for i in range(rows + 1)]
     bm = lathe(prof, seg * (1 if lod else 2))
     if not lod:
@@ -132,7 +132,7 @@ def hut(r, wallH, roofH, roof, posts, ropes, sx, tier, lod):
         for i in range(1, ropes + 1):
             f = i / (ropes + 1.6) + 0.06
             z, rad = top + roofH * f, rr * (1 - f) + 0.015 * rr
-            bm = lathe([(rad - 0.006, z - 0.014), (rad + 0.012, z), (rad - 0.006, z + 0.014)], seg * 2)
+            bm = lathe([(rad - 0.006, z - 0.014), (rad + 0.012, z), (rad - 0.006, z + 0.014)], seg)
             round_parts.append(part(bm, ROPE, name="rope"))
     apex = top + roofH
     if tier:
@@ -152,9 +152,8 @@ def hut(r, wallH, roofH, roof, posts, ropes, sx, tier, lod):
     if not lod:
         for i in range(posts):
             a = (i / posts) * math.tau + math.pi / posts + math.pi / 2
-            bm = cone(0.024, 0.02, wallH + 0.05, 6)
-            out.append(part(bm, TIMBER2, loc=(math.cos(a) * r * 1.01 * sx, -math.sin(a) * r * 1.01, y0 - 0.01), name="post"))
-            out.append(part(sphere(0.026, 6, 4), TIMBER, loc=(math.cos(a) * r * 1.01 * sx, -math.sin(a) * r * 1.01, y0 + wallH + 0.04), name="postcap"))
+            bm = lathe([(0.022, 0), (0.02, wallH * 0.9), (0.028, wallH + 0.03), (0, wallH + 0.06)], 5)
+            out.append(part(bm, TIMBER2, loc=(math.cos(a) * r * 1.01 * sx, -math.sin(a) * r * 1.01, y0 - 0.01), smooth=False, name="post"))
     # top knot: binding, pole, painted finial and a little flag
     if not lod:
         out.append(part(lathe([(0, apex + 0.04), (0.035, apex + 0.03), (0.05, apex - 0.02), (0.04, apex - 0.05)], 8), ROPE, name="knot"))
