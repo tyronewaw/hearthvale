@@ -1,6 +1,6 @@
 # Hearthvale villager voices: recording sheet
 
-48 short clips in five voices. The villagers speak a made-up, friendly tribal language, so the words are nonsense on purpose: say them as written.
+90 short clips in five voices. The villagers speak a made-up, friendly tribal language, so the words are nonsense on purpose: say them as written.
 
 The game already has a take of every line, made with VoxCPM2 from these same voice descriptions (`scripts/voicegen/`; the five designed voices are in `voices/refs/`). To replace any line with your own take, make it in VoiceStudio as below and send it: a file with the same name replaces the game's.
 
@@ -21,6 +21,9 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 - **blue_kid**: An excited, giggly child with a high, bouncy voice. (11 lines)
 - **red_deep**: A deep, rumbling, good-natured older man with a slow, earthy voice. (6 lines)
 - **red_bright**: A bright, lively woman with a strong, rhythmic, slightly husky voice. (6 lines)
+- **sheep**: A gentle, woolly cartoon sheep: a soft, quavering, nasal bleat, sweet and a little silly. (14 lines)
+- **monkey**: A cheeky cartoon monkey: quick, bright, squeaky chattering hoots and giggles. (14 lines)
+- **chicken**: A bright, fussy cartoon hen: quick, clucky and chirpy, with a little cackle. (14 lines)
 
 ## blue_warm
 
@@ -105,6 +108,69 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 | `red_chatter_2.wav` | Ho-mo, doru! | quick and chatty |
 | `red_chatter_4.wav` | Daka-ree? | quick and curious |
 
+## sheep
+
+> Voice design: *A gentle, woolly cartoon sheep: a soft, quavering, nasal bleat, sweet and a little silly.*
+
+| File | Say | How (Style) |
+|---|---|---|
+| `sheep_happy_1.wav` | Baa-aa! | content, happy bleat |
+| `sheep_happy_2.wav` | Mm-baa! | soft, pleased bleat |
+| `sheep_sad_1.wav` | Baa... | sad, droopy bleat |
+| `sheep_sad_2.wav` | Mehh... | sulky little bleat |
+| `sheep_call_1.wav` | Baa! | short, bright bleat |
+| `sheep_call_2.wav` | Meh-eh! | cheeky bleat |
+| `sheep_eat_1.wav` | Nom nom, mm! | munching happily |
+| `sheep_eat_2.wav` | Mnyom, baa! | chewing, then a bleat |
+| `sheep_play_1.wav` | Baa-ha-ha! | bouncy, playful bleat |
+| `sheep_play_2.wav` | Bweee! | excited bleat |
+| `sheep_sleep_1.wav` | Mmm-baaa... | sleepy, drawn-out bleat |
+| `sheep_sleep_2.wav` | Mm... baa. | drowsy murmur |
+| `sheep_cheer_1.wav` | Baa-aa-aa! | proud, triumphant bleat |
+| `sheep_cheer_2.wav` | Baa! Baa-aa! | joyful bleats |
+
+## monkey
+
+> Voice design: *A cheeky cartoon monkey: quick, bright, squeaky chattering hoots and giggles.*
+
+| File | Say | How (Style) |
+|---|---|---|
+| `monkey_happy_1.wav` | Hee-hee, ook! | happy giggling chatter |
+| `monkey_happy_2.wav` | Hee-hee-hee! | giggly monkey laugh |
+| `monkey_sad_1.wav` | Ooo... | sad little hoot |
+| `monkey_sad_2.wav` | Hmm-oo. | sulky whimper |
+| `monkey_call_1.wav` | Ook! Eee! | cheeky call |
+| `monkey_call_2.wav` | Eek-eek! | quick, squeaky call |
+| `monkey_eat_1.wav` | Nom nom, ook! | munching |
+| `monkey_eat_2.wav` | Mm-mm, nom! | yummy humming |
+| `monkey_play_1.wav` | Ooh-ooh-aah-aah! | excited monkey hoots |
+| `monkey_play_2.wav` | Eee-hee! | playful squeal |
+| `monkey_sleep_1.wav` | Hwaaa... ook. | sleepy yawn |
+| `monkey_sleep_2.wav` | Mm... ooo. | drowsy murmur |
+| `monkey_cheer_1.wav` | Ooh-ooh! Aah-aah! | triumphant hoots |
+| `monkey_cheer_2.wav` | Eee-eee-eee! | joyful screech |
+
+## chicken
+
+> Voice design: *A bright, fussy cartoon hen: quick, clucky and chirpy, with a little cackle.*
+
+| File | Say | How (Style) |
+|---|---|---|
+| `chicken_happy_1.wav` | Buk-buk-bukaw! | happy clucking |
+| `chicken_happy_2.wav` | Cluck, cluck! | content clucks |
+| `chicken_sad_1.wav` | Buk... bwk. | sad, droopy cluck |
+| `chicken_sad_2.wav` | Bawww... | sulky cluck |
+| `chicken_call_1.wav` | Cheep, cluck! | quick chirp and cluck |
+| `chicken_call_2.wav` | Cluck-cluck! | quick clucks |
+| `chicken_eat_1.wav` | Pek pek pek! | pecking and clucking |
+| `chicken_eat_2.wav` | Nom, buk! | munching cluck |
+| `chicken_play_1.wav` | Bukaaw! Buk! | excited clucking |
+| `chicken_play_2.wav` | Cheep-cheep! | playful chirps |
+| `chicken_sleep_1.wav` | Bwaa... cluck. | sleepy yawn |
+| `chicken_sleep_2.wav` | Mm... cluck. | drowsy murmur |
+| `chicken_cheer_1.wav` | Bu-kaaaw! | proud crow |
+| `chicken_cheer_2.wav` | Cock-a-doo! | triumphant crow |
+
 ## When each line plays
 
 - `pickup_*`: picked up by the god hand
@@ -122,3 +188,24 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 - `red_join_*`: a Red home or villager joins us
 - `red_fest_*`: a Red festival starts
 - `red_chatter_*`: Red idle chatter near the camera
+- `sheep_happy_*`: the pet is stroked (sheep)
+- `sheep_sad_*`: the pet is scolded (sheep)
+- `sheep_call_*`: the pet sets off to help or to make mischief (sheep)
+- `sheep_eat_*`: the pet eats (sheep)
+- `sheep_play_*`: the pet plays (sheep)
+- `sheep_sleep_*`: the pet settles down to sleep (sheep)
+- `sheep_cheer_*`: the pet grows up or learns a trick (sheep)
+- `monkey_happy_*`: the pet is stroked (monkey)
+- `monkey_sad_*`: the pet is scolded (monkey)
+- `monkey_call_*`: the pet sets off to help or to make mischief (monkey)
+- `monkey_eat_*`: the pet eats (monkey)
+- `monkey_play_*`: the pet plays (monkey)
+- `monkey_sleep_*`: the pet settles down to sleep (monkey)
+- `monkey_cheer_*`: the pet grows up or learns a trick (monkey)
+- `chicken_happy_*`: the pet is stroked (chicken)
+- `chicken_sad_*`: the pet is scolded (chicken)
+- `chicken_call_*`: the pet sets off to help or to make mischief (chicken)
+- `chicken_eat_*`: the pet eats (chicken)
+- `chicken_play_*`: the pet plays (chicken)
+- `chicken_sleep_*`: the pet settles down to sleep (chicken)
+- `chicken_cheer_*`: the pet grows up or learns a trick (chicken)

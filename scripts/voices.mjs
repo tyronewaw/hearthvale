@@ -59,9 +59,10 @@ for (const p of files) {
   done.add(k);
 }
 if (tmp) rmSync(tmp, { recursive: true, force: true });
-const missing = [...wanted].filter((k) => !done.has(k));
+// lines the game still has no clip for (earlier batches count: a batch can be just a few lines)
+const missing = [...wanted].filter((k) => !done.has(k) && !existsSync(join(OUT, `${k}.ogg`)));
 let bytes = 0;
 for (const k of done) bytes += statSync(join(OUT, `${k}.ogg`)).size;
 console.log(`voices: ${done.size} of ${wanted.size} lines processed into ${OUT} (${(bytes / 1024).toFixed(0)} KB)`);
-if (missing.length) console.log(`  still missing (${missing.length}): ${missing.join(', ')}`);
+if (missing.length) console.log(`  the game still has no clip for (${missing.length}): ${missing.join(', ')}`);
 if (unknown.length) console.log(`  not in the sheet, skipped (${unknown.length}): ${unknown.join(', ')}`);

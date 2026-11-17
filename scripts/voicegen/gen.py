@@ -30,6 +30,16 @@ from voxcpm import VoxCPM
 SHORTEST, LONGEST = 0.3, 1.8
 
 
+# If Whisper hears a rude word, a player might too: such a take is never kept (unless the word is
+# really in the line, like a rooster's "cock-a-doo").
+RUDE = re.compile(r"\b(fuck\w*|shit\w*|bitch\w*|cunt\w*|dick\w*|cock\w*|ass|arse\w*|piss\w*|bastard\w*|damn\w*|"
+                  r"wank\w*|twat\w*|slut\w*|whore\w*|tits?|nigg\w*|fag\w*|crap\w*|bollock\w*)\b", re.I)
+
+
+def rude(heard: str, text: str) -> bool:
+    return any(w.lower()[:4] not in text.lower() for w in RUDE.findall(heard))
+
+
 def letters(s: str) -> str:
     return re.sub(r"[^a-z]", "", s.lower())
 
@@ -82,6 +92,8 @@ def main() -> None:
             score = sim + min(voiced, 0.6) * 0.5
             score -= 0.4 * max(0.0, abs(np.log(rel)) - np.log(1.8))  # pitch far from the voice's own
             score -= 0.8 * max(0.0, dur - LONGEST) + 0.8 * max(0.0, SHORTEST - dur)  # too long or too short
+            if rude(heard, text):
+                score -= 10
             line = (f"{file:14s} {voice:10s} take {k}: {dur:4.2f}s F0 {f0:4.0f} ({rel:4.2f}x) voiced {voiced:.2f} "
                     f"peak {np.abs(wav).max():.2f} sim {sim:.2f} score {score:.2f} | {text} -> {heard[:60]} [{time.time() - t:.0f}s]")
             print(line, flush=True)

@@ -114,6 +114,14 @@ export interface PetCtx extends Ctx {
 
 const toast = (c: Ctx, msg: string) => c.emit({ k: 'toast', msg });
 const sfx = (c: Ctx, id: string) => c.emit({ k: 'sfx', id });
+/**
+ * The pet makes a sound (audio/voice-lines.json `<kind>_<ev>`: happy, sad, call, eat, play, sleep,
+ * cheer), pitched by its growth stage. `fallback` is the synth sfx to play if there's no clip.
+ */
+const petVoice = (c: Ctx, ev: string, fallback?: string) => {
+  const P = c.S.pet!;
+  c.emit({ k: 'voice', id: `${P.kind}_${ev}`, x: P.x, y: P.y, who: 0, stage: petStage(P), fallback });
+};
 
 /** Centre and radius the pet looks around: its post, the hand, or itself. */
 function petCentre(c: PetCtx, P: Pet): [number, number, number] {
@@ -378,10 +386,12 @@ export function finishAct(c: PetCtx, a: PetAct): 'keep' | void {
       c.emit({ k: 'flora', tiles: [t] });
     }
     if (k === 'chicken' && c.crops.has(t)) S.food = Math.max(0, S.food - 1);
+    petVoice(c, 'eat');
     if (R.next() < 0.6) P.poop = 15 + R.next() * 15;
   } else if (a.id === 'play') {
     n.fun = Math.min(100, n.fun + 45);
     voice(c, 'petplay', P.x, P.y, a.v ?? 0);
+    petVoice(c, 'play');
     S.faith += 2;
     for (const v of S.vills)
       if (tdist(v.x, v.y, P.x, P.y) < 2) {
@@ -474,6 +484,7 @@ export function finishAct(c: PetCtx, a: PetAct): 'keep' | void {
     msg = `${P.name} planted a grove`;
   } else if (a.id === 'dance') {
     S.cheers.push({ x: tx, y: ty, t: 25 });
+    petVoice(c, 'play');
     S.faith += 3;
     msg = `${P.name} danced for the village`;
   } else if (a.id === 'mischief') {
@@ -536,6 +547,7 @@ export function stepPet(c: PetCtx, dt: number): void {
       toast(c, `${P.name} has grown! Now ${STAGES[st]!.toLowerCase()}`);
       spark(c, P.x, P.y, 'spark', 14);
       sfx(c, 'magic');
+      petVoice(c, 'cheer');
     }
   }
   const a0 = P.act;
@@ -591,7 +603,8 @@ export function stepPet(c: PetCtx, dt: number): void {
       }
       A.ph = 'do';
       P.mv = false;
-      if (A.id === 'mischief' || A.id === 'help') sfx(c, P.kind);
+      if (A.id === 'mischief' || A.id === 'help') petVoice(c, 'call', P.kind);
+      else if (A.id === 'sleep') petVoice(c, 'sleep');
     } else {
       P.face = Math.atan2(dy, dx);
       const sp = PETS[P.kind].speed * [0.8, 1, 1.15][petStage(P)]! * (A.id === 'follow' ? 1.4 : 1), k = Math.min(1, (sp * dt) / d);
@@ -642,6 +655,7 @@ export function teach(c: PetCtx, good: boolean): Habit | null {
     S.stat.strokes++;
     spark(c, P.x, P.y, 'heart', 4);
     sfx(c, 'pet');
+    petVoice(c, 'happy');
     if (recent) {
       P.w[recent] = Math.min(5, P.w[recent] * (1 + 0.4 * LB));
       toast(c, `${P.name} will do more ${HNAME[recent].toLowerCase()}`);
@@ -652,6 +666,7 @@ export function teach(c: PetCtx, good: boolean): Habit | null {
     P.love = Math.max(0, P.love - (recent === 'mischief' ? 2 : 7));
     spark(c, P.x, P.y, 'puff', 3);
     sfx(c, 'scold');
+    petVoice(c, 'sad');
     if (recent) {
       P.w[recent] = Math.max(0.1, P.w[recent] * (1 - 0.35 * LB));
       toast(c, `${P.name} will do less ${HNAME[recent].toLowerCase()}`);
@@ -676,6 +691,7 @@ export function watchLearn(c: PetCtx, id: Trick, vx: number, vy: number): void {
     P.trickCD = Math.min(P.trickCD, 20);
     toast(c, (build ? `${P.name} learned to help build!` : `${P.name} learned to cast ${nm}!`) + (petStage(P) < 1 ? ' It can use it once it grows' : ''));
     sfx(c, 'magic');
+    petVoice(c, 'cheer');
     spark(c, P.x, P.y, 'spark', 12);
   } else if (!P.tricks.includes(id))
     toast(c, build ? `${P.name} watched you build. Once more and it will learn to help` : `${P.name} watched you cast ${nm}. Once more and it will learn it`);
@@ -695,7 +711,7 @@ export function feedPet(c: PetCtx): boolean {
   P.xp += 5;
   P.love = Math.min(100, P.love + 3);
   spark(c, P.x, P.y, 'heart', 3);
-  sfx(c, P.kind);
+  petVoice(c, 'eat', P.kind);
   toast(c, `${P.name} gobbles a basket of food`);
   return true;
 }
@@ -733,7 +749,7 @@ export function petCatch(c: Ctx, obj: Held, x: number, y: number, thrown: boolea
     P.xp += 4;
     P.love = Math.min(100, P.love + 2);
     spark(c, P.x, P.y, 'heart', 3);
-    sfx(c, P.kind);
+    petVoice(c, 'eat', P.kind);
     toast(c, `${P.name} munches the tree`);
     return true;
   }
@@ -742,7 +758,7 @@ export function petCatch(c: Ctx, obj: Held, x: number, y: number, thrown: boolea
     P.xp += 2;
     obj.v.wave = 2;
     spark(c, P.x, P.y, 'heart', 2);
-    sfx(c, P.kind);
+    petVoice(c, 'play', P.kind);
     toast(c, `${P.name} plays with the villager`);
   }
   return false;

@@ -24,5 +24,9 @@ Every third-party asset shipped with the game is listed here. Only add CC0 asset
 - **Caveat:** before any commercial release, re-check the VoxCPM2 model card at the revision above.
 - **Processing:** `npm run voices` trims, levels and converts the clips.
 
+## Pet sounds (`src/assets/voices/{sheep,monkey,chicken}_*.ogg`)
+- Made the same way as the villager voices: VoxCPM2 (Apache-2.0), by Claude in the cloud, at the project owner's request.
+- Each pet is a cartoon voice *designed* from a text description and its own noises, not an animal or a person recorded anywhere. Its reference is in `voices/refs/`.
+
 ## Code dependencies
 three (MIT), @dimforge/rapier3d-compat (Apache-2.0), vite (MIT), vite-plugin-pwa and Workbox (MIT), vitest (MIT), typescript (Apache-2.0).

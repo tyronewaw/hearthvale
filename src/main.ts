@@ -49,7 +49,7 @@ export interface HvDebug {
   timeOfDay(t: number): void;
   save(): void;
   /** Villager voice clips: how many are bundled, decoded and failed, and how many lines have played. */
-  voices(): Promise<{ count: number; decoded: number; failed: string[]; said: number; on: boolean; running: boolean }>;
+  voices(): Promise<{ count: number; decoded: number; failed: string[]; said: number; spoken: string[]; on: boolean; running: boolean }>;
 }
 declare global {
   interface Window {
@@ -481,7 +481,10 @@ function frame(now: number): void {
     R.onEvent(e);
     if (e.k === 'toast') ui.toast(e.msg);
     else if (e.k === 'sfx') audio.sfx(e.id);
-    else if (e.k === 'voice') voices.say(e.id, e.x, e.y, e.who, listener());
+    else if (e.k === 'voice') {
+      // the pet's clips replace its synthesised calls; without them (or with voices off) the synth plays
+      if (!voices.say(e.id, e.x, e.y, e.who, listener(), 1, e.stage) && e.fallback) audio.sfx(e.fallback);
+    }
     else if (e.k === 'ui') {
       redrawBar();
       ui.drawQuest(sim.S);
@@ -583,7 +586,7 @@ window.__hv = {
     else sim.landed(obj, wrap(g.x + vx), wrap(g.z + vz), true);
     return { x: wrap(g.x), z: wrap(g.z) };
   },
-  voices: async () => ({ ...(await voices.check()), said: voices.said, on: voices.on, running: !!audio.out() }),
+  voices: async () => ({ ...(await voices.check()), said: voices.said, spoken: voices.spoken, on: voices.on, running: !!audio.out() }),
 };
 
 requestAnimationFrame((t) => {
