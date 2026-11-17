@@ -6,7 +6,8 @@ note steers its delivery. Each line gets N takes; a take is scored by how close 
 transcript is to the written words, how much of it is voiced, its pitch against the voice's
 own, and its length. The best take is kept, and every take's numbers go to report.txt.
 
-usage: python gen.py <voice-lines.json> <model dir or openbmb/VoxCPM2> <out dir> [takes] [--only a,b] [--refs dir]
+usage: python gen.py <voice-lines.json> <model dir or openbmb/VoxCPM2> <out dir> [takes] [--only a,b] [--refs dir] [--seed n]
+(--seed shifts every take's seed, to remake a few lines with fresh takes.)
 References come from --refs (default <out>/refs; the shipped ones are voices/refs/*.flac). The
 chosen takes go to <out>/lines/<file>.wav; then `npm run voices -- <out>/lines` makes the game clips.
 """
@@ -43,6 +44,7 @@ def main() -> None:
     takes = int(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4].isdigit() else 3
     only = set(sys.argv[sys.argv.index("--only") + 1].split(",")) if "--only" in sys.argv else None
     refs = sys.argv[sys.argv.index("--refs") + 1] if "--refs" in sys.argv else f"{out}/refs"
+    seed0 = int(sys.argv[sys.argv.index("--seed") + 1]) if "--seed" in sys.argv else 0
     d = json.load(open(table))
     torch.set_num_threads(os.cpu_count() or 4)
     model = VoxCPM.from_pretrained(model_dir, load_denoiser=False, optimize=False)
@@ -63,7 +65,7 @@ def main() -> None:
         best, bscore = None, -1e9
         for k in range(takes):
             t = time.time()
-            torch.manual_seed(7000 + j * 10 + k)
+            torch.manual_seed(seed0 + 7000 + j * 10 + k)
             wav = model.generate(
                 text=f"({how}){text}", cfg_value=2.0, inference_timesteps=10, max_len=min(4096, max(256, len(text) * 6)),
                 retry_badcase=False, retry_badcase_max_times=1, reference_wav_path=ref_path[voice],

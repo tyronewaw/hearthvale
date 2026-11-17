@@ -67,7 +67,7 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 
 | File | Say | How (Style) |
 |---|---|---|
-| `pickup_3.wav` | Eee! | quick delighted squeal |
+| `pickup_3.wav` | Eee-hee! | quick delighted squeal and giggle |
 | `throw_1.wav` | Wheee! | short joyful shout |
 | `land_3.wav` | Bonk! | quick and cheeky |
 | `drop_3.wav` | Hehe! | quick giggle |

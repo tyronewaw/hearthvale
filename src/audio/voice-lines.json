@@ -26,7 +26,7 @@
   "lines": [
     ["pickup_1", "blue_warm", "Eep!", "quick surprised squeak"],
     ["pickup_2", "blue_jolly", "Whoa-hup!", "quick, surprised"],
-    ["pickup_3", "blue_kid", "Eee!", "quick delighted squeal"],
+    ["pickup_3", "blue_kid", "Eee-hee!", "quick delighted squeal and giggle"],
     ["throw_1", "blue_kid", "Wheee!", "short joyful shout"],
     ["throw_2", "blue_jolly", "Wa-hoo!", "short happy holler"],
     ["throw_3", "blue_warm", "Yaaah!", "short excited shout"],

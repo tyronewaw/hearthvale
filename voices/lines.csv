@@ -1,7 +1,7 @@
 file,voice,voice_description,text,style
 "pickup_1.wav","blue_warm","A warm, cheerful young woman with a soft, friendly, playful voice.","Eep!","quick surprised squeak"
 "pickup_2.wav","blue_jolly","A friendly, jolly man in his thirties with a hearty, round voice and a laugh in it.","Whoa-hup!","quick, surprised"
-"pickup_3.wav","blue_kid","An excited, giggly child with a high, bouncy voice.","Eee!","quick delighted squeal"
+"pickup_3.wav","blue_kid","An excited, giggly child with a high, bouncy voice.","Eee-hee!","quick delighted squeal and giggle"
 "throw_1.wav","blue_kid","An excited, giggly child with a high, bouncy voice.","Wheee!","short joyful shout"
 "throw_2.wav","blue_jolly","A friendly, jolly man in his thirties with a hearty, round voice and a laugh in it.","Wa-hoo!","short happy holler"
 "throw_3.wav","blue_warm","A warm, cheerful young woman with a soft, friendly, playful voice.","Yaaah!","short excited shout"
