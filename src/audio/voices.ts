@@ -1,5 +1,5 @@
 /**
- * Villager voices: short recorded clips in the tribe's made-up language (written in
+ * Villager voices and the pet's sounds: short recorded clips in the tribe's made-up language (written in
  * audio/voice-lines.json, made with VoxCPM2 voice design and processed by `npm run voices`). Each sim `voice` event picks one of that line's takes, gives it the
  * speaker's own pitch, pans it by where they stand on screen and quietens it with distance.
  * Lines without clips stay silent (the synthesised sound effects still play).
@@ -11,7 +11,7 @@ import type { Audio } from './audio';
 const URLS = import.meta.glob('../assets/voices/*.ogg', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 const PREF = 'hearthvale-voices';
 
-/** Seconds between two lines of the same kind (so a busy village doesn't babble). */
+/** Seconds between two lines of the same kind (so a busy village doesn't babble). Pet sounds use the default. */
 const GAP: Record<string, number> = { chatter: 2.2, red_chatter: 2.2, grow: 0.8, newhome: 0.8, festival: 3, red_fest: 3, red_join: 0.6, petplay: 2 };
 const MAX_AT_ONCE = 4;
 /**
@@ -20,6 +20,8 @@ const MAX_AT_ONCE = 4;
  * like the little people of a classic god game).
  */
 const SPEED = 1.3;
+/** The pet's sounds by growth stage: a baby squeaks higher and a grand old pet is deeper. */
+const PET_RATE = [1.25, 1, 0.82];
 
 export interface Listener {
   /** Where the camera looks (tiles) and how far away it is (world units). */
@@ -38,8 +40,9 @@ export class Voices {
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private last = new Map<string, number>();
   private playing = 0;
-  /** Lines actually started (for the smoke test). */
+  /** Lines actually started, and the events of the last few (for the smoke test). */
   said = 0;
+  spoken: string[] = [];
 
   constructor(private audio: Audio) {
     let saved: string | null = null;
@@ -114,25 +117,30 @@ export class Voices {
 
   /**
    * Say an `event` line at tile (x, y), heard from the listener. `who` gives a stable pitch
-   * per villager; `vol` scales it (chatter is quieter).
+   * per villager; a pet's sounds give its growth `stage` instead. `vol` scales it (chatter is
+   * quieter). Returns whether the event has clips and voices are on (so callers can fall back
+   * to a synthesised sound when not), even if this one is skipped to avoid babble.
    */
-  say(event: string, x: number, y: number, who: number, L: Listener, vol = 1): void {
-    if (!this.on) return;
+  say(event: string, x: number, y: number, who: number, L: Listener, vol = 1, stage?: number): boolean {
+    if (!this.on) return false;
     const urls = this.byEvent.get(event);
+    if (!urls?.length) return false;
     const out = this.audio.out();
-    if (!urls?.length || !out || this.playing >= MAX_AT_ONCE) return;
+    if (!out || this.playing >= MAX_AT_ONCE) return true;
     const now = out.ac.currentTime;
-    if (now - (this.last.get(event) ?? -99) < (GAP[event] ?? 0.25)) return;
+    if (now - (this.last.get(event) ?? -99) < (GAP[event] ?? 0.25)) return true;
     // heard within about 26 tiles of where the camera looks, and better close up
     const dx = L.wd(L.fx, x), dz = L.wd(L.fz, y), d = Math.hypot(dx, dz);
     const near = Math.max(0, 1 - d / 26) * Math.min(1, 34 / Math.max(10, L.dist));
-    if (near < 0.05) return;
+    if (near < 0.05) return true;
     this.last.set(event, now);
     const url = urls[Math.floor(Math.random() * urls.length)]!;
     const pan = Math.max(-0.8, Math.min(0.8, (dx * L.right[0] + dz * L.right[1]) / 10));
     // each villager has their own voice: a steady pitch from their id, plus a little wobble
     const h = who ? ((who * 2654435761) >>> 0) / 4294967296 : Math.random();
-    const rate = SPEED * (0.92 + h * 0.18) + (Math.random() - 0.5) * 0.05;
+    const rate = stage !== undefined
+      ? (PET_RATE[stage] ?? 1) * (1 + (Math.random() - 0.5) * 0.06)
+      : SPEED * (0.92 + h * 0.18) + (Math.random() - 0.5) * 0.05;
     this.playing++;
     void this.load(out.ac, url).then((buf) => {
       const o = this.audio.out();
@@ -149,6 +157,8 @@ export class Voices {
       src.onended = () => this.playing--;
       src.start();
       this.said++;
+      this.spoken = [...this.spoken.slice(-19), event];
     });
+    return true;
   }
 }

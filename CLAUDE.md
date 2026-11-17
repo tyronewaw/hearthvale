@@ -11,6 +11,7 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
   - phase 13: detailed tribal buildings, tribe colours, construction stages
   - phase 14: bigger buildings (2×2 work buildings, a compound for the great lodge)
   - phase 15: villager voices (made-up language; 48 lines made with VoxCPM2 by Claude in the cloud, at the user's request)
+  - phase 16: pet sounds (cartoon sheep, monkey and hen; 42 clips made the same way, pitched by growth stage)
 
   Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
@@ -96,7 +97,7 @@ src/physics/  physics.ts  Rapier world: 64 chunk heightfields on the torus, thro
   ballistic.ts simple arc used before Rapier's WASM loads (and in tests)
 src/input/    controls.ts (pointer, wheel, pinch, twist, keys, hold-to-repeat, carry), picking.ts
 src/audio/    audio.ts  synthesised WebAudio sound effects and generative music (ported), Sound toggle
-  voices.ts villager voice clips: per-villager pitch, distance and pan, gaps, Voices toggle
+  voices.ts villager voice clips and pet sounds: per-villager pitch (pets by stage), distance and pan, gaps, Voices toggle
   voice-lines.json the voices, events and lines (one table for the recording sheet and the game)
 src/ui/       hud.ts (HUD, quest panel, toolbar, toasts, modals, win), icons.ts (prototype pixel icons), styles.css,
               petcard.ts (pet card + choose screen; portraits are the prototype's pixel pets)
@@ -193,6 +194,17 @@ legacy/       the 2D prototype (design reference; do not edit)
     - **Limits:** a per-event gap (chatter 2.2 s, cheers 0.8 s, festivals 3 s), and at most 4 lines at once.
     - **Fallback:** a line with no clip is silent, and the synthesised effects still play.
     - **Smoke test:** `__hv.voices()` reports clips bundled, decoded and failed, and lines spoken. Smoke fails if a clip doesn't decode, the count differs from the table, or nobody spoke while villagers were handled.
+  - **Pet sounds** (phase 16, the user's pick after the villager voices).
+    - **Voices.** sheep, monkey and chicken are cartoon voices in the same table. `design.py` designs them from their own noises (`PET_TEXT`, e.g. "Baa-aa! Baa! Mbaa…") and keeps the candidate Whisper hears most clearly.
+    - **Lines.** Seven events per species, `<kind>_<ev>`, with 2 takes each:
+      - happy (stroked) and sad (scolded);
+      - call (arriving to help or make mischief);
+      - eat (finishing a meal, fed a basket, munching a dropped tree);
+      - play (play, dance, a gently dropped villager);
+      - sleep (arriving at its bed);
+      - cheer (growing a stage or learning a trick).
+    - **Sim.** `petVoice(c, ev, fallback?)` in pet.ts emits a `voice` event with the pet's `stage`. Where the pet used to make its synthesised species call (`sfx(P.kind)`), that call is now the `fallback`.
+    - **Player.** `voices.say()` returns whether the event has clips and voices are on. Main plays the fallback only when it doesn't. A pet's rate follows its stage (`PET_RATE` 1.25 / 1 / 0.82 for baby / young / grand), not the villagers' `SPEED`.
   - **Settings:** the top bar's Voices button appears once clips exist, saved as `hearthvale-voices`. Workbox precaches `*.ogg` for offline play.
 - **Gravity is 14 u/s²** (1 unit ≈ a villager's height × 2): snappy arcs, not floaty.
 - **Culling.** `GameRenderer.cull()` tests each of the 64 chunks against the camera frustum using its *bent* bounds: the drop is lowest at the far corner and highest at the near one, plus 2.2 headroom for trees and huts. The terrain hides culled chunks, and the flora only lays out instances in visible chunks. Instanced meshes stay `frustumCulled = false` because their bounds are unbent.
@@ -246,7 +258,7 @@ legacy/       the 2D prototype (design reference; do not edit)
 
 ## Ideas queued
 - More audio. The user's PC has an AMD Radeon RX 7900 XTX (24 GB), so prefer tools that run on AMD (Vulkan GGUF engines, ROCm, DirectML/ONNX) over CUDA-only ones.
-  - A narrator and pet voices, with the same pipeline as the villagers (`scripts/voicegen/` in the cloud works).
+  - A narrator, with the same pipeline as the villagers (`scripts/voicegen/` in the cloud works).
   - Music, from a music generator: VoiceStudio is for speech.
   - VoiceStudio's MOSS-SoundEffect is Apache-2.0 but NVIDIA-only.
 - Move the `balance.ts` tunables to JSON for tuning without code.

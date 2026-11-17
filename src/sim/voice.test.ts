@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import table from '../audio/voice-lines.json';
+import { BALANCE } from './balance';
 import type { SimEvent } from './events';
+import { feedPet, stepPet, teach } from './pet';
 import { convertVill, land, mkV, newHome, placeStruct } from './village';
 import { Sim } from './sim';
 import { emptyState } from './worldgen';
-import { idx } from './world';
+import { TICK, idx } from './world';
 
 function flatSim(): Sim {
   const S = emptyState(5);
@@ -50,5 +53,37 @@ describe('villagers speak at the right moments', () => {
     sim.grab(red2.id);
     expect(voices(sim)).toContain('red_pickup');
     land(sim, { k: 'v', v: red2 }, 12, 12, false);
+  });
+});
+
+describe('the pet makes its own sounds', () => {
+  const petSounds = (sim: Sim) => sim.drain().filter((e): e is Extract<SimEvent, { k: 'voice' }> => e.k === 'voice' && /^(sheep|monkey|chicken)_/.test(e.id));
+
+  it('happy when stroked, sad when scolded, munching when fed, pitched by its growth stage', () => {
+    const sim = flatSim(), S = sim.S;
+    sim.choosePet('monkey', 'Pip', 20.5, 20.5);
+    sim.drain();
+    teach(sim, true);
+    expect(petSounds(sim).map((e) => [e.id, e.stage])).toContainEqual(['monkey_happy', 0]);
+    teach(sim, false);
+    expect(petSounds(sim).map((e) => e.id)).toContain('monkey_sad');
+    S.food = 50;
+    expect(feedPet(sim)).toBe(true);
+    // the synthesised call is the fallback for when there's no clip
+    expect(petSounds(sim)).toContainEqual(expect.objectContaining({ id: 'monkey_eat', fallback: 'monkey' }));
+  });
+
+  it('cheers when it grows up, with the new stage for a deeper voice', () => {
+    const sim = flatSim(), P = (sim.choosePet('sheep', 'Wooly', 20.5, 20.5), sim.S.pet!);
+    sim.drain();
+    P.xp = BALANCE.petYoung + 1;
+    stepPet(sim, TICK);
+    expect(petSounds(sim)).toContainEqual(expect.objectContaining({ id: 'sheep_cheer', stage: 1 }));
+  });
+
+  it('every sound the pet can make has clips in the table for every species', () => {
+    for (const kind of ['sheep', 'monkey', 'chicken'])
+      for (const ev of ['happy', 'sad', 'call', 'eat', 'play', 'sleep', 'cheer'])
+        expect(table.lines.filter((l) => l[0]!.startsWith(`${kind}_${ev}_`)).length).toBeGreaterThanOrEqual(2);
   });
 });

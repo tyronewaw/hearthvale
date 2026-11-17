@@ -347,6 +347,11 @@ try {
     await frames(pg, 3);
     await pg.screenshot({ path: 'shots/pet-scold.png' });
     if (!(await pg.evaluate((l) => window.__hv.sim().S.pet.love < l, love0))) errors.push('pet: scold did nothing');
+    // and it answered with its own sounds (a monkey: monkey_happy, monkey_sad)
+    await pg.waitForTimeout(300);
+    const ps = await pg.evaluate(() => window.__hv.voices());
+    console.log(`pet sounds: ${ps.spoken.filter((e) => e.startsWith('monkey_')).join(', ') || 'none'} (audio ${ps.running ? 'running' : 'not running'})`);
+    if (ps.count && ps.running && !ps.spoken.some((e) => e.startsWith('monkey_'))) errors.push('pet: no sound when stroked or scolded');
     // each species at a different size
     for (const [kind, xp] of [['sheep', 0], ['monkey', 60], ['chicken', 200]]) {
       await pg.evaluate(([kind, xp]) => { const hv = window.__hv, sim = hv.sim(), S = sim.S, [sx, sy] = S.start, old = { x: sx + 2.6, y: sy + 2.4 };
