@@ -18,7 +18,8 @@
     "buildshots": "node scripts/buildshots.mjs",
     "voicesheet": "node scripts/voicesheet.mjs",
     "voices": "node scripts/voices.mjs",
-    "voicepreview": "node scripts/voicepreview.mjs"
+    "voicepreview": "node scripts/voicepreview.mjs",
+    "vibeshots": "node scripts/vibeshots.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
