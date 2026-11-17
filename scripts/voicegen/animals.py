@@ -51,7 +51,8 @@ def load(path: str) -> np.ndarray:
 
 
 def calls(y: np.ndarray) -> list[tuple[int, int]]:
-    """Single calls: louder stretches split at gaps, merged across tiny gaps, 0.18-2.6 s long."""
+    """Candidate calls: louder stretches split at quiet gaps (merged across tiny gaps, 0.18-2.6 s),
+    plus windows slid along the recording, for busy ones (a yard of clucking hens) that never go quiet."""
     iv = librosa.effects.split(y, top_db=24, frame_length=1024, hop_length=256)
     merged: list[list[int]] = []
     for s, e in iv:
@@ -60,7 +61,20 @@ def calls(y: np.ndarray) -> list[tuple[int, int]]:
         else:
             merged.append([s, e])
     pad = int(0.04 * SR)
-    return [(max(0, s - pad), min(len(y), e + pad)) for s, e in merged if 0.18 * SR <= e - s <= 2.6 * SR]
+    out = [(max(0, s - pad), min(len(y), e + pad)) for s, e in merged if 0.18 * SR <= e - s <= 2.6 * SR]
+    for w in (0.5, 0.9, 1.4):
+        n = int(w * SR)
+        out += [(s, s + n) for s in range(0, len(y) - n, int(0.25 * SR))]
+    return out
+
+
+def floor(y: np.ndarray) -> float:
+    """The recording's background level: its quietest tenth."""
+    return float(np.percentile(librosa.feature.rms(y=y, frame_length=1024, hop_length=256)[0], 10)) + 1e-6
+
+
+def overlap(a: tuple[int, int], b: tuple[int, int]) -> float:
+    return max(0, min(a[1], b[1]) - max(a[0], b[0])) / min(a[1] - a[0], b[1] - b[0])
 
 
 class Judge:
@@ -82,7 +96,7 @@ class Judge:
         return float(good - 0.7 * bad), top
 
 
-def shape(seg: np.ndarray, rate: float = 1.0, lowpass: float | None = None, gain_db: float = 0.0) -> np.ndarray:
+def shape(seg: np.ndarray, rate: float = 1.0, lowpass: float | None = None) -> np.ndarray:
     """Pitch and pace together by `rate` (like a tape), optional muffling, and a gentle fade at both ends."""
     if rate != 1.0:
         seg = librosa.resample(seg, orig_sr=SR, target_sr=int(SR / rate))
@@ -95,7 +109,7 @@ def shape(seg: np.ndarray, rate: float = 1.0, lowpass: float | None = None, gain
         seg = seg.copy()
         seg[:n] *= np.linspace(0, 1, n)
         seg[-n:] *= np.linspace(1, 0, n)
-    return seg * (10 ** (gain_db / 20))
+    return seg
 
 
 def main() -> None:
@@ -110,8 +124,10 @@ def main() -> None:
     by_title = {o["title"][5:]: o for o in sources}
     find = lambda pre: [o for t, o in by_title.items() if t.startswith(pre) and os.path.exists(os.path.join(base, o["file"]))]
 
-    def cuts(prefixes: list[str], cls: list[str]):
-        """Every call in these recordings, best first: (score, seg, where, top class, rms)."""
+    def cuts(prefixes: list[str], cls: list[str]) -> list[dict]:
+        """The clearest calls in these recordings, best first. A call under 12 dB above the
+        recording's background is left out (levelling it would bring the hiss up too), and
+        quieter calls rank lower. Within each length (short, medium, long) no two overlap."""
         res, seen = [], set()
         for pre in prefixes:
             for o in find(pre):
@@ -119,66 +135,79 @@ def main() -> None:
                     continue
                 seen.add(o["title"])
                 y = load(os.path.join(base, o["file"]))
+                bg = floor(y)
+                cand = []
                 for s, e in calls(y):
                     seg = y[s:e]
-                    sc, top = judge.score(judge.probs(seg), cls)
                     rms = float(np.sqrt((seg ** 2).mean()))
-                    res.append((sc, seg, f"{o['title'][5:40]} @{s / SR:.1f}s", top, rms))
-        return sorted(res, key=lambda r: -r[0])
+                    snr = 20 * np.log10(rms / bg)
+                    if snr < 12:
+                        continue
+                    sc, top = judge.score(judge.probs(seg), cls)
+                    cand.append({"score": sc, "rank": sc + 0.01 * (min(snr, 35) - 25), "seg": seg, "dur": (e - s) / SR,
+                                 "where": f"{o['title'][5:40]} @{s / SR:.1f}s", "top": top, "snr": snr, "file": o["title"], "iv": (s, e)})
+                kept: list[dict] = []
+                for c in sorted(cand, key=lambda c: -c["rank"]):
+                    size = lambda d: 0 if d < 0.7 else 1 if d < 1.2 else 2
+                    if all(size(c["dur"]) != size(k["dur"]) or overlap(c["iv"], k["iv"]) < 0.3 for k in kept):
+                        kept.append(c)
+                res += kept
+        return sorted(res, key=lambda c: -c["rank"])
 
     for kind, sp in SPECIES.items():
-        pool = [c for c in cuts(sp["src"], sp["cls"]) if c[0] > 0.05]
+        pool = [c for c in cuts(sp["src"], sp["cls"]) if c["score"] > 0.05]
         log(f"== {kind}: {len(pool)} usable calls")
         for c in pool[:12]:
-            log(f"   {c[0]:.2f} {len(c[1]) / SR:4.2f}s rms {c[4]:.3f} top={c[3]} | {c[2]}")
+            log(f"   {c['score']:.2f} {c['dur']:4.2f}s {c['snr']:3.0f} dB top={c['top']} | {c['where']}")
         if len(pool) < 6:
             log(f"!! {kind}: too few clear calls")
             continue
-        dur = lambda c: len(c[1]) / SR
-        used: set[str] = set()
-        def pick(pred, n=2, avoid=True):
-            got = [c for c in pool if pred(c) and (not avoid or c[2] not in used)][:n]
-            if len(got) < n:  # fall back to the best clear calls left
-                got += [c for c in pool if c not in got and (not avoid or c[2] not in used)][: n - len(got)]
-            for c in got:
-                used.add(c[2])
+        used: list[dict] = []
+
+        def free(c: dict) -> bool:
+            return all(u["file"] != c["file"] or overlap(u["iv"], c["iv"]) < 0.3 for u in used)
+
+        def pick(lo: float, hi: float, n: int = 2, among: list[dict] | None = None) -> list[dict]:
+            """The best n unused calls lo..hi seconds long (any unused ones if too few, then any at all)."""
+            among = pool if among is None else among
+            got = [c for c in among if lo <= c["dur"] <= hi and free(c)][:n]
+            got += [c for c in among if c not in got and free(c)][: n - len(got)]
+            got += [c for c in among if c not in got][: n - len(got)]
+            used.extend(got)
             return got
-        out_clips: dict[str, list[tuple[np.ndarray, str]]] = {}
-        out_clips["call"] = [(shape(c[1]), c[2]) for c in pick(lambda c: 0.2 <= dur(c) <= 0.9)]
-        out_clips["happy"] = [(shape(c[1], 1.04), c[2]) for c in pick(lambda c: 0.4 <= dur(c) <= 1.4)]
-        out_clips["sad"] = [(shape(c[1], 0.86, 3500), c[2] + " (lowered)") for c in pick(lambda c: 0.4 <= dur(c) <= 1.6)]
-        quiet = sorted([c for c in pool if c[2] not in used and 0.3 <= dur(c) <= 1.6], key=lambda c: c[4])
-        sl = quiet[:2] if len(quiet) >= 2 else pick(lambda c: True)
-        for c in sl:
-            used.add(c[2])
-        out_clips["sleep"] = [(shape(c[1], 0.8, 2200, -4), c[2] + " (lowered, muffled)") for c in sl]
-        shorts = [c for c in pool if 0.18 <= dur(c) <= 0.7]
-        play = []
-        for i in range(2):
-            a, b = shorts[(2 * i) % len(shorts)], shorts[(2 * i + 1) % len(shorts)]
-            gap = np.zeros(int(0.07 * SR), dtype=np.float32)
-            play.append((np.concatenate([shape(a[1], 1.06), gap, shape(b[1], 1.12)]), f"{a[2]} + {b[2]}"))
-        out_clips["play"] = play
+
+        clips: dict[str, list[tuple[np.ndarray, str]]] = {}
+        clips["call"] = [(shape(c["seg"]), c["where"]) for c in pick(0.2, 0.9)]
+        clips["happy"] = [(shape(c["seg"], 1.04), c["where"]) for c in pick(0.4, 1.4)]
+        clips["sad"] = [(shape(c["seg"], 0.86, 3500), c["where"] + " (lowered)") for c in pick(0.4, 1.6)]
+        clips["sleep"] = [(shape(c["seg"], 0.8, 2200), c["where"] + " (lowered, muffled)") for c in pick(0.4, 1.6)]
+        gap = np.zeros(int(0.07 * SR), dtype=np.float32)
+        sh = pick(0.18, 0.7, 4)
+        clips["play"] = [(np.concatenate([shape(a["seg"], 1.06), gap, shape(b["seg"], 1.12)]), f"{a['where']} + {b['where']}")
+                         for a, b in ((sh[0], sh[1 % len(sh)]), (sh[2 % len(sh)], sh[3 % len(sh)]))]
         if sp["cheer_src"]:
-            ch = cuts(sp["cheer_src"], sp["cls"] + (["Crowing, cock-a-doodle-doo"] if kind == "chicken" else []))
-            ch = sorted([c for c in ch if c[0] > 0.05], key=lambda c: -(dur(c) * c[4]))[:2]
+            crow = [c for c in cuts(sp["cheer_src"], sp["cls"] + (["Crowing, cock-a-doodle-doo"] if kind == "chicken" else [])) if c["score"] > 0.05]
+            ch = pick(0.6, 2.6, among=sorted(crow, key=lambda c: -c["dur"]))
         else:
-            ch = sorted([c for c in pool if c[2] not in used and dur(c) >= 0.6], key=lambda c: -(dur(c) * c[4]))[:2]
-        out_clips["cheer"] = [(shape(c[1]), c[2]) for c in ch]
-        if sp["eat"] == "Chickens demanding food":
-            eat = sorted([c for c in pool if "demanding" in c[2] and dur(c) <= 1.2], key=lambda c: c[4])[:2]
-            out_clips["eat"] = [(shape(c[1], 1.0), c[2]) for c in eat]
-        else:
-            chew = []
-            for o in find(sp["eat"]):
+            ch = pick(1.0, 2.6)
+        clips["cheer"] = [(shape(c["seg"]), c["where"]) for c in ch]
+        chew = []
+        for o in find(sp["eat"]):
+            if kind == "chicken":  # hungry hens' quick clucks, a little brisker
+                eat = [c for c in cuts([sp["eat"]], sp["cls"]) if c["score"] > 0.05]
+                chew = [(shape(c["seg"], 1.08), c["where"]) for c in pick(0.3, 0.9, among=eat)]
+            else:  # chewing is steady: the two 1.2 s stretches with the most going on
                 y = load(os.path.join(base, o["file"]))
-                # chewing is steady: take two 1.2 s stretches with the most going on
                 win = int(1.2 * SR)
                 starts = sorted(range(0, len(y) - win, win // 2), key=lambda s: -float(np.sqrt((y[s:s + win] ** 2).mean())))[:2]
                 chew = [(shape(y[s:s + win], 0.92 if kind == "sheep" else 1.15), f"{o['title'][5:40]} @{s / SR:.1f}s (chewing)") for s in starts]
-            out_clips["eat"] = chew
-        for ev, clips in out_clips.items():
-            for n, (seg, where) in enumerate(clips[:2], 1):
+        if not chew and kind == "chicken":  # no feeding recording: short pecking clucks
+            chew = [(shape(c["seg"], 1.08), c["where"] + " (brisker)") for c in pick(0.2, 0.7)]
+        if not chew:
+            log(f"!! {kind}: no eating sound (is {sp['eat']} downloaded?)")
+        clips["eat"] = chew
+        for ev, cl in clips.items():
+            for n, (seg, where) in enumerate(cl[:2], 1):
                 sf.write(f"{out}/{kind}_{ev}_{n}.wav", seg, SR, subtype="FLOAT")
                 log(f"   {kind}_{ev}_{n}: {len(seg) / SR:.2f}s from {where}")
     rep.close()
