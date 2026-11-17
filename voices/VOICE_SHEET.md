@@ -124,10 +124,10 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 | `sheep_eat_2.wav` | Mnyom, baa! | chewing, then a bleat |
 | `sheep_play_1.wav` | Baa-ha-ha! | bouncy, playful bleat |
 | `sheep_play_2.wav` | Bweee! | excited bleat |
-| `sheep_sleep_1.wav` | Hwaaa... mm. | sleepy yawn |
+| `sheep_sleep_1.wav` | Mmm-baaa... | sleepy, drawn-out bleat |
 | `sheep_sleep_2.wav` | Mm... baa. | drowsy murmur |
 | `sheep_cheer_1.wav` | Baa-aa-aa! | proud, triumphant bleat |
-| `sheep_cheer_2.wav` | Mbaa! Baa! | joyful bleats |
+| `sheep_cheer_2.wav` | Baa! Baa-aa! | joyful bleats |
 
 ## monkey
 
@@ -135,7 +135,7 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 
 | File | Say | How (Style) |
 |---|---|---|
-| `monkey_happy_1.wav` | Ook ook! | happy chatter |
+| `monkey_happy_1.wav` | Ook-ook, eee! | happy chatter |
 | `monkey_happy_2.wav` | Hee-hee-hee! | giggly monkey laugh |
 | `monkey_sad_1.wav` | Ooo... | sad little hoot |
 | `monkey_sad_2.wav` | Hmm-oo. | sulky whimper |
@@ -160,13 +160,13 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 | `chicken_happy_2.wav` | Cluck, cluck! | content clucks |
 | `chicken_sad_1.wav` | Buk... bwk. | sad, droopy cluck |
 | `chicken_sad_2.wav` | Bawww... | sulky cluck |
-| `chicken_call_1.wav` | Ba-gawk! | short, bright squawk |
+| `chicken_call_1.wav` | Cheep, cluck! | quick chirp and cluck |
 | `chicken_call_2.wav` | Cluck-cluck! | quick clucks |
 | `chicken_eat_1.wav` | Pek pek pek! | pecking and clucking |
 | `chicken_eat_2.wav` | Nom, buk! | munching cluck |
 | `chicken_play_1.wav` | Bukaaw! Buk! | excited clucking |
 | `chicken_play_2.wav` | Cheep-cheep! | playful chirps |
-| `chicken_sleep_1.wav` | Bwaa... buk. | sleepy yawn |
+| `chicken_sleep_1.wav` | Bwaa... cluck. | sleepy yawn |
 | `chicken_sleep_2.wav` | Mm... cluck. | drowsy murmur |
 | `chicken_cheer_1.wav` | Bu-kaaaw! | proud crow |
 | `chicken_cheer_2.wav` | Cock-a-doo! | triumphant crow |
