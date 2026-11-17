@@ -24,6 +24,7 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
 - `npm run buildshots` renders every building (home levels, work buildings, a site at three stages, Red homes) into `shots/buildings.png`, for reviewing building art.
 - `npm run petshots` renders every pet species at every growth stage into `shots/pets-growth.png` (3×3), for reviewing pet art.
 - `npm run voicesheet` rewrites the villager voice sheet (`voices/`) from `src/audio/voice-lines.json`; `npm run voices -- <zip or folder>` turns recordings (the user's, or `scripts/voicegen/` output) into game clips.
+- `npm run voicepreview` strings every voice clip together, sped up as in game, into `shots/voices-preview.mp3` for listening.
 - `scripts/voicegen/` (Python, `pip install -r scripts/voicegen/requirements.txt`, about 7 GB with PyTorch plus the 4.7 GB model): `design.py` designs the voices, and `gen.py` makes lines, best of N takes. Usage is in each file's docstring. Use the cloud environment **hearthvale**, which allows HuggingFace (huggingface.co and us.aws.cdn.hf.co).
 - `npm run balance` runs a headless scripted player for `DAYS` (default 30) and writes a day-by-day table to `shots/balance.txt`. It takes about 3 s.
 - Add `?fresh` to start a new world instead of loading the save, and `?nosave` to stop autosaving.
@@ -173,7 +174,7 @@ legacy/       the 2D prototype (design reference; do not edit)
 - **PWA.** vite-plugin-pwa provides the manifest and a service worker that precaches everything: game code, Rapier's WASM (inlined in its JS chunk, so `maximumFileSizeToCacheInBytes` is 8 MB), the font and the prototype. It auto-updates. `/legacy/` is excluded from the navigation fallback, so it stays the prototype. An Install button appears when the browser fires `beforeinstallprompt`. The smoke test reloads offline and checks both pages start.
 - **Sound.** Effects and music are synthesised (no files). Sound unlocks on the first pointer or key press, and the on/off setting is saved in localStorage (`hearthvale-sound`).
 - **Villager voices** (phase 15, the user's choices: villagers only, a made-up language. The user planned to record in VoiceStudio, then asked Claude to make them instead).
-  - **One table:** `src/audio/voice-lines.json` holds the voices (descriptions for voice design), the events and the 48 lines. It feeds `npm run voicesheet` (writes `voices/VOICE_SHEET.md` and `voices/lines.csv` for the user) and the game.
+  - **One table:** `src/audio/voice-lines.json` holds the voices (descriptions for voice design), the events and the 48 lines (quick calls). It feeds `npm run voicesheet` (writes `voices/VOICE_SHEET.md` and `voices/lines.csv` for the user) and the game.
   - **Engine:** VoxCPM2 with voice design (Apache-2.0; no real person's voice). Never OmniVoice (VoiceStudio's default; its weights are non-commercial).
   - **How the shipped clips were made** (`scripts/voicegen/`):
     - **Designing the voices.** Each voice is designed from its description over a calm English sentence; an excited made-up sentence pushed every voice to child pitch. The candidate whose pyin pitch is nearest the description's typical range is kept (men 100–160 Hz, the elder 75–125, women 170–260, the kid 260–380). The five references are in `voices/refs/*.flac`.
@@ -186,7 +187,8 @@ legacy/       the 2D prototype (design reference; do not edit)
     - festival (at our Hearth), red_fest, red_join, petplay.
     - main adds throw (on a real throw) and ambient chatter / red_chatter: every 2.5–6.5 s, a random villager within 10 tiles of the focus, only when the camera is within 30 units.
   - **Player:** `src/audio/voices.ts` bundles clips via `import.meta.glob` and decodes them after unlock.
-    - **Variation:** one random take per line, with a per-villager pitch from their id (0.9–1.12) plus a little wobble.
+    - **Style** (the user asked for villagers that sound "like Populous"): short, snappy calls of a word or two, played fast (`SPEED` 1.3), so a small, chirpy people yelp, cheer and murmur. These are original sounds in that spirit, never that game's audio.
+    - **Variation:** one random take per line, with a per-villager rate from their id (×0.92–1.10 on top of `SPEED`) plus a little wobble.
     - **Space:** volume falls off within 26 tiles of the focus and with zoom. Stereo pan follows the camera's right vector.
     - **Limits:** a per-event gap (chatter 2.2 s, cheers 0.8 s, festivals 3 s), and at most 4 lines at once.
     - **Fallback:** a line with no clip is silent, and the synthesised effects still play.

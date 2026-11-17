@@ -14,6 +14,12 @@ const PREF = 'hearthvale-voices';
 /** Seconds between two lines of the same kind (so a busy village doesn't babble). */
 const GAP: Record<string, number> = { chatter: 2.2, red_chatter: 2.2, grow: 0.8, newhome: 0.8, festival: 3, red_fest: 3, red_join: 0.6, petplay: 2 };
 const MAX_AT_ONCE = 4;
+/**
+ * Clips play a little fast, so the villagers sound like a small, chirpy people: their quick
+ * calls rise in pitch and pace together, like a sped-up tape (the user wanted them to sound
+ * like the little people of a classic god game).
+ */
+const SPEED = 1.3;
 
 export interface Listener {
   /** Where the camera looks (tiles) and how far away it is (world units). */
@@ -126,7 +132,7 @@ export class Voices {
     const pan = Math.max(-0.8, Math.min(0.8, (dx * L.right[0] + dz * L.right[1]) / 10));
     // each villager has their own voice: a steady pitch from their id, plus a little wobble
     const h = who ? ((who * 2654435761) >>> 0) / 4294967296 : Math.random();
-    const rate = 0.9 + h * 0.22 + (Math.random() - 0.5) * 0.04;
+    const rate = SPEED * (0.92 + h * 0.18) + (Math.random() - 0.5) * 0.05;
     this.playing++;
     void this.load(out.ac, url).then((buf) => {
       const o = this.audio.out();

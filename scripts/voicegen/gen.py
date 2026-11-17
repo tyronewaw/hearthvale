@@ -25,6 +25,10 @@ from transformers import pipeline
 from voxcpm import VoxCPM
 
 
+# Lines are quick calls (a word or two): takes outside this length, in seconds, lose points.
+SHORTEST, LONGEST = 0.3, 1.8
+
+
 def letters(s: str) -> str:
     return re.sub(r"[^a-z]", "", s.lower())
 
@@ -75,7 +79,7 @@ def main() -> None:
             rel = f0 / ref_f0[voice] if f0 == f0 else 3.0
             score = sim + min(voiced, 0.6) * 0.5
             score -= 0.4 * max(0.0, abs(np.log(rel)) - np.log(1.8))  # pitch far from the voice's own
-            score -= 0.5 * max(0.0, dur - 3.4) + 0.5 * max(0.0, 0.4 - dur)  # too long or too short
+            score -= 0.8 * max(0.0, dur - LONGEST) + 0.8 * max(0.0, SHORTEST - dur)  # too long or too short
             line = (f"{file:14s} {voice:10s} take {k}: {dur:4.2f}s F0 {f0:4.0f} ({rel:4.2f}x) voiced {voiced:.2f} "
                     f"peak {np.abs(wav).max():.2f} sim {sim:.2f} score {score:.2f} | {text} -> {heard[:60]} [{time.time() - t:.0f}s]")
             print(line, flush=True)
