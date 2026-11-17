@@ -11,7 +11,7 @@ import { Kit } from './kit';
 import { worldMat } from './materials';
 import { TRIBE_BLUE, TRIBE_RED } from './models';
 import { WATER_Y, surfaceY } from './scale';
-import villagerParts from '../assets/models/villager.json';
+import villagerFile from '../assets/models/villager.json';
 
 const SKIN = ['#c98d5e', '#a8704a', '#e0b088', '#8a5a3a'].map((c) => new Color(c));
 const HAIR = ['#2a1a12', '#5a3420', '#1e1e2a', '#7a4b2a'].map((c) => new Color(c));
@@ -144,10 +144,10 @@ export class Villagers {
     };
     // smooth-shaded, vertex-coloured (white, with dark eyes, feet and hems) times each villager's colours
     const soft = worldMat(new MeshLambertMaterial({ vertexColors: true }));
-    const fc = Math.min(cap, FINE_CAP), P = villagerParts;
+    const fc = Math.min(cap, FINE_CAP), part = (k: keyof Body) => blendGeo(villagerFile, k) ?? this.box[k].geometry;
     this.fine = {
-      legs: mk(blendGeo(P.legs), fc * 2, soft), arms: mk(blendGeo(P.arms), fc * 2, soft), torso: mk(blendGeo(P.torso), fc, soft),
-      belt: mk(blendGeo(P.belt), fc, soft), head: mk(blendGeo(P.head), fc, soft), hair: mk(blendGeo(P.hair), fc, soft),
+      legs: mk(part('legs'), fc * 2, soft), arms: mk(part('arms'), fc * 2, soft), torso: mk(part('torso'), fc, soft),
+      belt: mk(part('belt'), fc, soft), head: mk(part('head'), fc, soft), hair: mk(part('hair'), fc, soft),
     };
     this.hats = Object.fromEntries(HATS.map((h) => [h, mk(hatGeo(h), cap, vc)])) as Record<Hat, InstancedMesh>;
     this.tools = Object.fromEntries(HATS.map((h) => [h, mk(toolGeo(h), cap, vc)])) as Record<Hat, InstancedMesh>;

@@ -167,15 +167,34 @@ def triangles(objs: list[bpy.types.Object], origin=(0, 0, 0)) -> dict[str, list[
 
 
 def export(models: dict[str, dict[str, list[float]]], path: str) -> None:
-    """Write named models (from `triangles`) as compact JSON."""
-    def r(a: list[float], d: int) -> list[float]:
-        return [round(x, d) for x in a]
-    out = {k: {"p": r(m["p"], 4), "n": r(m["n"], 3), "c": r(m["c"], 3), "t": [int(x) for x in m["t"]]} for k, m in models.items()}
+    """Write named models (from `triangles`) as compact JSON: a shared colour palette and, per
+    model, base64 of int16 positions (1/4096 units), int8 normals and one byte per vertex for
+    the palette index (bit 7 set where the part is tinted). blendmodels.ts decodes it."""
+    import base64
+    import struct
+    pal: list[tuple[int, int, int]] = []
+    index: dict[tuple[int, int, int], int] = {}
+    out_models = {}
+    for k, m in models.items():
+        P, Nn, C, T = m["p"], m["n"], m["c"], m["t"]
+        n = len(P) // 3
+        pos = struct.pack(f"<{n * 3}h", *[max(-32767, min(32767, round(x * 4096))) for x in P])
+        nor = struct.pack(f"<{n * 3}b", *[max(-127, min(127, round(x * 127))) for x in Nn])
+        col = bytearray(n)
+        for i in range(n):
+            q = tuple(round(c * 1000) for c in C[i * 3:i * 3 + 3])
+            if q not in index:
+                index[q] = len(pal)
+                pal.append(q)
+            col[i] = index[q] | (0x80 if T[i] else 0)
+        out_models[k] = base64.b64encode(pos + nor + bytes(col)).decode()
+    if len(pal) > 128:
+        raise SystemExit(f"{path}: {len(pal)} colours, at most 128 fit")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
-        json.dump(out, f, separators=(",", ":"))
+        json.dump({"palette": [[c / 1000 for c in q] for q in pal], "models": out_models}, f, separators=(",", ":"))
     tris = {k: len(m["p"]) // 9 for k, m in models.items()}
-    print(f"{path}: {os.path.getsize(path) // 1024} KB, triangles {tris}")
+    print(f"{path}: {os.path.getsize(path) // 1024} KB, {len(pal)} colours, triangles {tris}")
 
 
 # ---- preview ----

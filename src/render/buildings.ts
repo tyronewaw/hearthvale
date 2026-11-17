@@ -93,9 +93,10 @@ export class Buildings {
   private smokeT = new Map<number, number>();
 
   constructor(scene: Scene, private particles: Particles) {
-    const mat = worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    // Smooth where the model is (Blender-made huts), faceted where its normals are (kit boxes).
+    const mat = worldMat(new MeshLambertMaterial({ vertexColors: true }));
     // buildings: one draw call per model, with paint, cloth and flags in the tribe's colour
-    const tmat = tintable(worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+    const tmat = tintable(worldMat(new MeshLambertMaterial({ vertexColors: true })));
     this.homes = this.homeM.map((m) => im(scene, m.geo, tmat, N * N / 8, true));
     this.homesFar = this.homeFarM.map((m) => im(scene, m.geo, tmat, N * N / 8, true));
     this.structs = Object.fromEntries(STRUCT_KINDS.map((k) => [k, im(scene, this.structM[k].geo, tmat, 256, true)])) as Record<StructKind, InstancedMesh>;
