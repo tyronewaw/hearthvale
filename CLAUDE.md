@@ -12,6 +12,8 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
   - phase 14: bigger buildings (2×2 work buildings, a compound for the great lodge)
   - phase 15: villager voices (made-up language; 48 lines made with VoxCPM2 by Claude in the cloud, at the user's request)
   - phase 16: pet sounds (cartoon sheep, monkey and hen; 42 clips made the same way, pitched by growth stage)
+  - phase 17: real sheep and hen sounds cut from public-domain recordings (the user asked for "royalty free noises… then change
+    pitch", then picked the mix: real sheep and hen, cartoon monkey)
   - phase 18: the "vibe pass" towards Black & White / Populous (the user's ask): smooth, painted rolling terrain, warmer light,
     a gradient sky, and models made in Blender by Claude in the cloud (villagers, huts, the god hand, trees, the pets).
 
@@ -29,6 +31,8 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
 - `npm run voicesheet` rewrites the villager voice sheet (`voices/`) from `src/audio/voice-lines.json`; `npm run voices -- <zip or folder>` turns recordings (the user's, or `scripts/voicegen/` output) into game clips.
 - `npm run voicepreview` strings the clips together as the game plays them, for listening: `shots/voices-preview.mp3` (villagers) and `shots/pet-<kind>.mp3` (each pet's sounds at young pitch, then some at baby and grand pitch).
 - `scripts/voicegen/` (Python, `pip install -r scripts/voicegen/requirements.txt`, about 7 GB with PyTorch plus the 4.7 GB model): `design.py` designs the voices, and `gen.py` makes lines, best of N takes. Usage is in each file's docstring. Use the cloud environment **hearthvale**, which allows HuggingFace (huggingface.co and us.aws.cdn.hf.co).
+- `scripts/voicegen/animals.py <sources.json> <out> [ast dir]` cuts pet sounds from real recordings (usage in its docstring).
+  `voices/animal-sources.json` lists the recordings the shipped sheep and hen clips come from.
 - `npm run vibeshots` takes look-review screenshots from the dev server (`shots/vibe-*.png`: village, close-up, wide, dusk,
   autumn, villagers up close, the hand). `-- --q 'tm=agx&ex=1.2' --tag -agx` adds URL flags and a file suffix, for comparing looks.
 - `scripts/blender/` builds models in Blender, run as the `bpy` Python module (`python3.13 -m venv venv && venv/bin/pip install bpy`,
@@ -240,6 +244,24 @@ legacy/       the 2D prototype (design reference; do not edit)
       - cheer (growing a stage or learning a trick).
     - **Sim.** `petVoice(c, ev, fallback?)` in pet.ts emits a `voice` event with the pet's `stage`. Where the pet used to make its synthesised species call (`sfx(P.kind)`), that call is now the `fallback`.
     - **Player.** `voices.say()` returns whether the event has clips and voices are on. Main plays the fallback only when it doesn't. A pet's rate follows its stage (`PET_RATE` 1.25 / 1 / 0.82 for baby / young / grand), not the villagers' `SPEED`.
+  - **Real animal sounds** (phase 17). The sheep and hen clips are real animals; the monkey stays the cartoon voice.
+    - **Sources.** Public-domain field recordings from Wikimedia Commons (originally pdsounds.org): sheep, goats, hens and a
+      rooster. Each is listed in `voices/animal-sources.json` and ASSETS.md.
+    - **Cutting** (`scripts/voicegen/animals.py`):
+      - Each recording is split into calls at its quiet gaps. Busy recordings that never go quiet (a yard of hens) also get
+        sliding windows.
+      - A call needs to be 12 dB above the recording's background.
+      - An AudioSet classifier (AST) scores each call for its animal (Sheep/Bleat/Goat, Chicken/Cluck/Fowl), minus speech,
+        wind and other noise. Within each length, calls must not overlap, and no audio is reused across events.
+    - **Shaping the events:**
+      - happy and call are clear calls (happy a touch faster); sad is ×0.86 and muffled; sleep is ×0.8 and more muffled;
+      - play is two quick calls back to back; cheer is the biggest call (a rooster's crow for the hen);
+      - eat is chewing if a chewing recording is there, otherwise short calls a little brisker.
+      - The game still pitches each clip by growth stage.
+    - **Getting recordings.** Commons' file server (upload.wikimedia.org) rate-limits scripts that give no contact details
+      (HTTP 429, "robot policy"); we never send the user's. A retry every 4+ minutes got about one file per half hour.
+      iNaturalist (api.inaturalist.org, static.inaturalist.org) has openly licensed wild monkey recordings with a licence per
+      sound and no such limit; the environment allows those hosts and opengameart.org.
   - **Settings:** the top bar's Voices button appears once clips exist, saved as `hearthvale-voices`. Workbox precaches `*.ogg` for offline play.
 - **Gravity is 14 u/s²** (1 unit ≈ a villager's height × 2): snappy arcs, not floaty.
 - **Culling.** `GameRenderer.cull()` tests each of the 64 chunks against the camera frustum using its *bent* bounds: the drop is lowest at the far corner and highest at the near one, plus 2.2 headroom for trees and huts. The terrain hides culled chunks, and the flora only lays out instances in visible chunks. Instanced meshes stay `frustumCulled = false` because their bounds are unbent.
