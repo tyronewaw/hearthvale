@@ -15,11 +15,13 @@ Every third-party asset shipped with the game is listed here. Only add CC0 asset
 
 ## Villager voices (`src/assets/voices/*.ogg`)
 - **Lines:** written for this game in a made-up language (`src/audio/voice-lines.json`; recording sheet in `voices/VOICE_SHEET.md`).
-- **Generation:** the project owner, on their own PC, in [VoiceStudio](https://github.com/debpalash/VoiceStudio). The app is AGPL-3.0, which covers the app, not its outputs.
-- **Model and licence:** the VoxCPM2 model ([openbmb/VoxCPM2](https://huggingface.co/openbmb/VoxCPM2), Apache-2.0 upstream model-card label).
-- **Voices:** made with *voice design* from text descriptions, so no real person's voice is cloned.
+- **Model and licence:** VoxCPM2 ([openbmb/VoxCPM2](https://huggingface.co/openbmb/VoxCPM2), revision `7936080b`, Apache-2.0 on its model card), run through the `voxcpm` 2.0.3 package (Apache-2.0).
+- **How they were made:** by Claude, in a cloud session, at the project owner's request (`scripts/voicegen/`).
+  - **Voices:** each of the five voices was *designed* from its text description in the table, so no real person's voice is used. The designed reference clips are kept in `voices/refs/` (FLAC), so new lines can be made in the same voices.
+  - **Lines:** every line was spoken in its voice from that reference, with its delivery note as a style instruction. The best of three takes was kept, judged by an automatic check (OpenAI Whisper base, MIT, used only for checking and not shipped).
+- **Your own takes:** the owner can replace any line with a take made in [VoiceStudio](https://github.com/debpalash/VoiceStudio) with the same VoxCPM2 engine. The app is AGPL-3.0, which covers the app, not its outputs.
 - **Excluded:** VoiceStudio's default OmniVoice engine (non-commercial weights) and Llama-OuteTTS (non-commercial). Chatterbox is excluded too, as its licence was unclear.
-- **Caveat:** VoiceStudio's own inventory notes that upstream licence labels are metadata it hasn't fully reviewed. Before any commercial release, re-check the VoxCPM2 model card at the revision used.
+- **Caveat:** before any commercial release, re-check the VoxCPM2 model card at the revision above.
 - **Processing:** `npm run voices` trims, levels and converts the clips.
 
 ## Code dependencies

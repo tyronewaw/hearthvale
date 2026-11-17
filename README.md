@@ -22,7 +22,7 @@ It is being rebuilt in phases, and each phase ends playable.
 12. ✅ Pets change as they grow: lamb to curly-horned ram, baby monkey to wise old monkey, chick to rooster
 13. ✅ Detailed tribal buildings in your tribe's colours; building sites go up stake by stake, frame by frame
 14. ✅ Bigger buildings: work buildings take 2×2 tiles, and a great lodge stands in its own palisaded compound
-15. 🎙️ Villager voices in a made-up tribal language (the game side is ready, and the recordings are being made in VoiceStudio)
+15. ✅ Villager voices: they chatter, cheer, squeal when thrown and celebrate in their own made-up language (5 voices, 48 lines, made with the open VoxCPM2 model)
 
 ## Controls (so far)
 - **Hand** (`1`): grab villagers, trees and rocks. Let go gently to drop, or flick and let go to throw: they arc, bounce, splash and get up a little dizzy. Drop villagers on a building to give them that job, and trees on the Hearth for wood. Drag empty land to look around.

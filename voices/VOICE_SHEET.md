@@ -2,6 +2,8 @@
 
 48 short clips in five voices. The villagers speak a made-up, friendly tribal language, so the words are nonsense on purpose: say them as written.
 
+The game already has a take of every line, made with VoxCPM2 from these same voice descriptions (`scripts/voicegen/`; the five designed voices are in `voices/refs/`). To replace any line with your own take, make it in VoiceStudio as below and send it: a file with the same name replaces the game's.
+
 ## In VoiceStudio
 
 1. **Engine: VoxCPM2** (Model Catalogue). It is Apache-2.0, so its output can ship in the game, and it can *design* a voice from a description, so no real person's voice is cloned.
@@ -10,7 +12,7 @@
 2. Open **Voice design**. For each voice below, paste its description, generate a test line, and keep regenerating until you like it. Note the **seed** if there is one, and reuse the same description and seed for every line in that voice so it stays the same person.
 3. For each line, put the text in the text box and the "how" note in the **Style** field. Generate 2 or 3 takes and keep the best.
 4. Export as **WAV** (or FLAC/MP3) named **exactly** as the File column, e.g. `throw_1.wav`. Don't worry about silence at the ends or loudness: I trim, level and convert everything.
-5. Put all the files in one folder, zip it, and attach the zip in our chat. Missing a few is fine: the game falls back to its own sounds for anything not there yet.
+5. Put all the files in one folder, zip it, and attach the zip in our chat. Send only the ones you want to replace; the rest stay as they are.
 
 ## The voices
 
