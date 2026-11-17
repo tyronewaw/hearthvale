@@ -135,7 +135,7 @@ The game already has a take of every line, made with VoxCPM2 from these same voi
 
 | File | Say | How (Style) |
 |---|---|---|
-| `monkey_happy_1.wav` | Ook-ook, eee! | happy chatter |
+| `monkey_happy_1.wav` | Hee-hee, ook! | happy giggling chatter |
 | `monkey_happy_2.wav` | Hee-hee-hee! | giggly monkey laugh |
 | `monkey_sad_1.wav` | Ooo... | sad little hoot |
 | `monkey_sad_2.wav` | Hmm-oo. | sulky whimper |

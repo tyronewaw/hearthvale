@@ -110,7 +110,7 @@
     ["sheep_sleep_2", "sheep", "Mm... baa.", "drowsy murmur"],
     ["sheep_cheer_1", "sheep", "Baa-aa-aa!", "proud, triumphant bleat"],
     ["sheep_cheer_2", "sheep", "Baa! Baa-aa!", "joyful bleats"],
-    ["monkey_happy_1", "monkey", "Ook-ook, eee!", "happy chatter"],
+    ["monkey_happy_1", "monkey", "Hee-hee, ook!", "happy giggling chatter"],
     ["monkey_happy_2", "monkey", "Hee-hee-hee!", "giggly monkey laugh"],
     ["monkey_sad_1", "monkey", "Ooo...", "sad little hoot"],
     ["monkey_sad_2", "monkey", "Hmm-oo.", "sulky whimper"],
