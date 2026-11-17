@@ -3,7 +3,7 @@
 // Usage: npm run smoke            (builds first)
 //        npm run smoke -- --no-build
 import { execSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { preview } from 'vite';
 
@@ -224,6 +224,14 @@ try {
       }
     }
   }
+  // villager voices: every clip in the table is bundled and decodes, and villagers spoke while handled
+  const lines = JSON.parse(readFileSync('src/audio/voice-lines.json', 'utf8')).lines.length;
+  const vo = await desk.evaluate(() => window.__hv.voices());
+  console.log(`voices: ${vo.count}/${lines} clips bundled, ${vo.decoded} decoded, ${vo.said} lines spoken (audio ${vo.running ? 'running' : 'not running'})`);
+  if (vo.failed.length) errors.push(`voices: ${vo.failed.length} clips failed to decode: ${vo.failed.slice(0, 3).join(', ')}`);
+  if (vo.count && vo.count !== lines) errors.push(`voices: ${vo.count} clips bundled but the table has ${lines} lines`);
+  if (vo.count && vo.decoded !== vo.count) errors.push(`voices: only ${vo.decoded} of ${vo.count} clips decoded`);
+  if (vo.count && vo.running && !vo.said) errors.push('voices: nobody spoke while villagers were picked up, dropped and thrown');
   await desk.mouse.move(640, 420);
   await desk.evaluate(() => window.__hv.setTool('raise'));
   await frames(desk, 6);
