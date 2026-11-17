@@ -62,6 +62,31 @@ def part(bm: bmesh.types.BMesh, colour: Colour, *, loc=(0, 0, 0), rot=(0, 0, 0),
     return ob
 
 
+def tube(points: list[tuple[float, float, float]], radius: float, colour: Colour, *, taper: float = 1.0, sides: int = 6,
+         tint=False, smooth=True, name="tube") -> bpy.types.Object:
+    """A round tube along a smooth curve through `points` (Blender axes), from `radius` at the
+    start to radius × taper at the end, with rounded ends: tails, horns, feathers."""
+    cu = bpy.data.curves.new(name, "CURVE")
+    cu.dimensions = "3D"
+    cu.bevel_depth = radius
+    cu.bevel_resolution = max(1, sides // 6)
+    cu.resolution_u = 3
+    cu.use_fill_caps = True
+    sp = cu.splines.new("NURBS")
+    sp.points.add(len(points) - 1)
+    for i, p in enumerate(points):
+        sp.points[i].co = (*p, 1.0)
+        sp.points[i].radius = 1.0 + (taper - 1.0) * i / max(1, len(points) - 1)
+    sp.use_endpoint_u = True
+    sp.order_u = min(4, len(points))
+    ob = bpy.data.objects.new(name, cu)
+    bpy.context.scene.collection.objects.link(ob)
+    ob["tint"] = bool(tint)
+    ob["smooth"] = bool(smooth)
+    _colours[ob.name] = colour
+    return ob
+
+
 # ---- primitives (bmesh, centred on the origin unless noted) ----
 
 def cube(sx=1.0, sy=1.0, sz=1.0) -> bmesh.types.BMesh:

@@ -13,7 +13,7 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
   - phase 15: villager voices (made-up language; 48 lines made with VoxCPM2 by Claude in the cloud, at the user's request)
   - phase 16: pet sounds (cartoon sheep, monkey and hen; 42 clips made the same way, pitched by growth stage)
   - phase 18: the "vibe pass" towards Black & White / Populous (the user's ask): smooth, painted rolling terrain, warmer light,
-    a gradient sky, and models made in Blender by Claude in the cloud (villagers, huts, the god hand, trees). Pets are next.
+    a gradient sky, and models made in Blender by Claude in the cloud (villagers, huts, the god hand, trees, the pets).
 
   Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
@@ -33,7 +33,7 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
   autumn, villagers up close, the hand). `-- --q 'tm=agx&ex=1.2' --tag -agx` adds URL flags and a file suffix, for comparing looks.
 - `scripts/blender/` builds models in Blender, run as the `bpy` Python module (`python3.13 -m venv venv && venv/bin/pip install bpy`,
   about 400 MB, no GPU needed). `venv/bin/python scripts/blender/<huts|villager|hand|trees>.py [--preview shots/blender-x.png]`
-  rewrites `src/assets/models/<name>.json` and optionally renders a Cycles preview of exactly what the game gets.
+  (also `pets`) rewrites `src/assets/models/<name>.json` and optionally renders a Cycles preview of exactly what the game gets.
 - `npm run balance` runs a headless scripted player for `DAYS` (default 30) and writes a day-by-day table to `shots/balance.txt`. It takes about 3 s.
 - Add `?fresh` to start a new world instead of loading the save, and `?nosave` to stop autosaving.
 
@@ -145,6 +145,9 @@ legacy/       the 2D prototype (design reference; do not edit)
     Only villagers within `FINE_R` (13) of the camera, up to `FINE_CAP` (160), get them; the rest stay boxes.
   - **Hand:** palm and finger segments by name (`palm`, `f<finger>s<seg>`, `t0`, `t1`); hand.ts still poses them.
   - **Trees:** lumpy leafy crowns, bushes and trunks for near trees (smooth, lighter on top); pines stay crisp code-built cones.
+  - **Pets:** `<kind><stage>_<body|head|leg|tail>`, with the code-built pieces' pivots; pets.ts keeps headAt, legs, tailAt and
+    the poses. `tube()` (a bevelled curve) makes tails, horns and feathers.
+  - **Size:** the model JSON is about 1.1 MB in the bundle (huts 544 KB, pets 447 KB). If it grows, fetch it as binary instead.
   - Building, hand and near-tree materials are smooth (no `flatShading`): Blender parts bring their own normals, and kit boxes
     and octahedra are faceted anyway.
 - **Materials.** Always create world materials through `worldMat()`. CSM's `setupMaterial` replaces `onBeforeCompile`, so the order is CSM, then bend, then any `extendShader` patches. Shadow casters use `castsShadow(mesh)`, which sets the bent depth material; without it, shadows slide off away from the focus.
