@@ -49,6 +49,17 @@ try {
     await page.screenshot({ path: `shots/${name}${tag}.png` });
     console.log('·', name);
   }
+  // close up on a few villagers: the nearest group to the Hearth
+  await page.evaluate(() => {
+    const hv = window.__hv, S = hv.sim().S, [sx, sy] = S.start, r = hv.rig;
+    const v = S.vills.filter((o) => o.tribe === 0).sort((a, b) => Math.hypot(a.x - sx, a.y - sy) - Math.hypot(b.x - sx, b.y - sy))[3] ?? S.vills[0];
+    if (hv.togglePause && !hv.togglePause()) hv.togglePause();
+    r.fx = v.x; r.fz = v.y; r.zoom = 0; r.yaw = 0.9; r.apply();
+    S.t = Math.floor(S.t / 150) * 150 + 0.4 * 150;
+  });
+  await frames(6);
+  await page.screenshot({ path: `shots/vibe-folk${tag}.png` });
+  console.log('· vibe-folk');
 } finally {
   await browser.close();
   await server.close();

@@ -226,7 +226,7 @@ export class GameRenderer {
     this.trees.count = nt;
     this.rocks.count = nr;
     this.trees.instanceMatrix.needsUpdate = this.rocks.instanceMatrix.needsUpdate = true;
-    this.villagers.update(S, fx, fz, time, view.alpha, this.rig.dist * 1.25 + 14, extra);
+    this.villagers.update(S, fx, fz, time, view.alpha, this.rig.dist * 1.25 + 14, extra, this.rig.camera.position);
     this.pet.update(S, fx, fz, time, view.alpha);
     this.effects.update(S, fx, fz, time, this.sky.night);
     this.border.update(S, fx, fz, time, view.dt);
