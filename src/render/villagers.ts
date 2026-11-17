@@ -6,10 +6,12 @@ import type { RoleId } from '../sim/defs';
 import { isWater } from '../sim/terrain';
 import { wd, type State, type Vill } from '../sim/world';
 import { bendDrop, bent } from './bend';
+import { blendGeo } from './blendmodels';
 import { Kit } from './kit';
 import { worldMat } from './materials';
 import { TRIBE_BLUE, TRIBE_RED } from './models';
 import { WATER_Y, surfaceY } from './scale';
+import villagerFile from '../assets/models/villager.json';
 
 const SKIN = ['#c98d5e', '#a8704a', '#e0b088', '#8a5a3a'].map((c) => new Color(c));
 const HAIR = ['#2a1a12', '#5a3420', '#1e1e2a', '#7a4b2a'].map((c) => new Color(c));
@@ -93,18 +95,28 @@ const B = new Matrix4(), L = new Matrix4(), A = new Matrix4(), q4 = new Quaterni
 const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 1);
 const one = new Vector3(1, 1, 1);
 
+/** Villagers nearer the camera than this get the rounded Blender-made bodies (up to FINE_CAP of them). */
+const FINE_R = 13, FINE_CAP = 160;
+
+/** One villager's body parts: simple boxes, or the rounded close-up ones. */
+interface Body {
+  legs: InstancedMesh;
+  arms: InstancedMesh;
+  torso: InstancedMesh;
+  belt: InstancedMesh;
+  head: InstancedMesh;
+  hair: InstancedMesh;
+}
+
 /**
  * The tribe: chunky low-poly people, instanced per body part (legs, arms, torso, belt,
  * head, hair, hats and tools), animated procedurally on the CPU. Everyone wears tribe blue;
- * jobs show as belts, hats and tools. Only villagers near the camera are drawn.
+ * jobs show as belts, hats and tools. Only villagers near the camera are drawn; the nearest
+ * get rounded bodies made in Blender (scripts/blender/villager.py), the rest simple boxes.
  */
 export class Villagers {
-  private legs: InstancedMesh;
-  private arms: InstancedMesh;
-  private torso: InstancedMesh;
-  private belt: InstancedMesh;
-  private head: InstancedMesh;
-  private hair: InstancedMesh;
+  private box: Body;
+  private fine: Body;
   private hats: Record<Hat, InstancedMesh>;
   private tools: Record<Hat, InstancedMesh>;
   private blobs: InstancedMesh;
@@ -122,12 +134,21 @@ export class Villagers {
       scene.add(m);
       return m;
     };
-    this.legs = mk(pivoted(new BoxGeometry(0.065, 0.17, 0.075), -0.085), cap * 2);
-    this.arms = mk(pivoted(new BoxGeometry(0.055, 0.17, 0.06), -0.08), cap * 2);
-    this.torso = mk(new BoxGeometry(0.18, 0.2, 0.13), cap);
-    this.belt = mk(new BoxGeometry(0.188, 0.04, 0.138), cap);
-    this.head = mk(new BoxGeometry(0.15, 0.145, 0.145), cap);
-    this.hair = mk(new BoxGeometry(0.158, 0.055, 0.152), cap);
+    this.box = {
+      legs: mk(pivoted(new BoxGeometry(0.065, 0.17, 0.075), -0.085), cap * 2),
+      arms: mk(pivoted(new BoxGeometry(0.055, 0.17, 0.06), -0.08), cap * 2),
+      torso: mk(new BoxGeometry(0.18, 0.2, 0.13), cap),
+      belt: mk(new BoxGeometry(0.188, 0.04, 0.138), cap),
+      head: mk(new BoxGeometry(0.15, 0.145, 0.145), cap),
+      hair: mk(new BoxGeometry(0.158, 0.055, 0.152), cap),
+    };
+    // smooth-shaded, vertex-coloured (white, with dark eyes, feet and hems) times each villager's colours
+    const soft = worldMat(new MeshLambertMaterial({ vertexColors: true }));
+    const fc = Math.min(cap, FINE_CAP), part = (k: keyof Body) => blendGeo(villagerFile, k) ?? this.box[k].geometry;
+    this.fine = {
+      legs: mk(part('legs'), fc * 2, soft), arms: mk(part('arms'), fc * 2, soft), torso: mk(part('torso'), fc, soft),
+      belt: mk(part('belt'), fc, soft), head: mk(part('head'), fc, soft), hair: mk(part('hair'), fc, soft),
+    };
     this.hats = Object.fromEntries(HATS.map((h) => [h, mk(hatGeo(h), cap, vc)])) as Record<Hat, InstancedMesh>;
     this.tools = Object.fromEntries(HATS.map((h) => [h, mk(toolGeo(h), cap, vc)])) as Record<Hat, InstancedMesh>;
     const pg = new PlaneGeometry(0.42, 0.42);
@@ -140,7 +161,7 @@ export class Villagers {
    * Lay out every visible villager. `alpha` interpolates between the last two sim ticks;
    * `extra` adds figures the sim isn't walking (the one in the hand).
    */
-  update(S: State, fx: number, fz: number, time: number, alpha: number, radius: number, extra: Figure[]): void {
+  update(S: State, fx: number, fz: number, time: number, alpha: number, radius: number, extra: Figure[], cam?: Vector3): void {
     const figs: Figure[] = [];
     const r2 = radius * radius;
     for (const v of S.vills) {
@@ -156,7 +177,7 @@ export class Villagers {
     }
     figs.push(...extra);
 
-    let n = 0;
+    let n = 0, nb = 0, nf = 0;
     const hatN: Record<Hat, number> = { farmer: 0, forester: 0, fisher: 0, builder: 0, priest: 0 };
     this.drawn = [];
     for (const f of figs) {
@@ -186,26 +207,28 @@ export class Villagers {
       this.drawn.push({ v, p: new Vector3(wx, y + 0.3 - bendDrop(wx, wz), wz) });
 
       const skin = SKIN[v.sk % 4]!, blue = (v.tribe === 1 ? RED : BLUE)[v.c % 4]!;
+      const near = !!cam && nf < this.fine.head.instanceMatrix.count && cam.distanceToSquared(v3.set(wx, y, wz)) < FINE_R * FINE_R;
+      const body = near ? this.fine : this.box, i = near ? nf++ : nb++;
       // legs
       const swing = walking ? Math.sin(ph) * 0.7 : f.pose === 'fly' ? Math.sin(time * 14 + v.id) * 0.8 : held ? Math.sin(time * 8 + v.id) * 0.5 : sit ? -1.4 : 0;
       for (const side of [-1, 1]) {
         L.compose(v3.set(side * 0.048, 0.17, 0), qa.setFromAxisAngle(X, sit ? swing : swing * side), one).premultiply(B);
-        this.legs.setMatrixAt(n * 2 + (side > 0 ? 1 : 0), L);
-        this.legs.setColorAt(n * 2 + (side > 0 ? 1 : 0), skin);
+        body.legs.setMatrixAt(i * 2 + (side > 0 ? 1 : 0), L);
+        body.legs.setColorAt(i * 2 + (side > 0 ? 1 : 0), skin);
       }
       // body
       L.compose(v3.set(0, 0.27, 0), qa.identity(), one).premultiply(B);
-      this.torso.setMatrixAt(n, L);
-      this.torso.setColorAt(n, blue);
+      body.torso.setMatrixAt(i, L);
+      body.torso.setColorAt(i, blue);
       L.compose(v3.set(0, 0.185, 0), qa.identity(), one).premultiply(B);
-      this.belt.setMatrixAt(n, L);
-      this.belt.setColorAt(n, BELT[v.role]);
+      body.belt.setMatrixAt(i, L);
+      body.belt.setColorAt(i, BELT[v.role]);
       L.compose(v3.set(0, 0.45, 0), qa.identity(), one).premultiply(B);
-      this.head.setMatrixAt(n, L);
-      this.head.setColorAt(n, skin);
+      body.head.setMatrixAt(i, L);
+      body.head.setColorAt(i, skin);
       L.compose(v3.set(0, 0.52, -0.005), qa.identity(), one).premultiply(B);
-      this.hair.setMatrixAt(n, L);
-      this.hair.setColorAt(n, HAIR[v.c % 4]!);
+      body.hair.setMatrixAt(i, L);
+      body.hair.setColorAt(i, HAIR[v.c % 4]!);
       // arms: walk swing, work chop, wave, paddle, or up in the air when held
       for (const side of [-1, 1]) {
         let ax = walking ? -Math.sin(ph) * 0.6 * side : 0, az = 0;
@@ -220,8 +243,8 @@ export class Villagers {
         } else az = side * 0.12;
         q4.setFromAxisAngle(X, ax).multiply(qa.setFromAxisAngle(Z, az * -side));
         L.compose(v3.set(side * 0.118, 0.36, 0), q4, one).premultiply(B);
-        this.arms.setMatrixAt(n * 2 + (side > 0 ? 1 : 0), L);
-        this.arms.setColorAt(n * 2 + (side > 0 ? 1 : 0), skin);
+        body.arms.setMatrixAt(i * 2 + (side > 0 ? 1 : 0), L);
+        body.arms.setColorAt(i * 2 + (side > 0 ? 1 : 0), skin);
         if (side > 0 && v.role !== 'settler') {
           const h = v.role as Hat, arm = A.copy(L);
           L.compose(v3.set(0, -0.15, 0.02), qa.identity(), one).premultiply(arm);
@@ -241,13 +264,16 @@ export class Villagers {
       } else this.blobs.setMatrixAt(n, L.makeScale(0, 0, 0));
       n++;
     }
-    for (const m of [this.torso, this.belt, this.head, this.hair, this.blobs]) m.count = n;
-    this.legs.count = this.arms.count = n * 2;
+    this.blobs.count = n;
+    for (const [b, c] of [[this.box, nb], [this.fine, nf]] as const) {
+      b.torso.count = b.belt.count = b.head.count = b.hair.count = c;
+      b.legs.count = b.arms.count = c * 2;
+    }
     for (const h of HATS) {
       this.hats[h].count = hatN[h];
       this.tools[h].count = hatN[h];
     }
-    for (const m of [this.legs, this.arms, this.torso, this.belt, this.head, this.hair, this.blobs, ...Object.values(this.hats), ...Object.values(this.tools)]) {
+    for (const m of [...Object.values(this.box), ...Object.values(this.fine), this.blobs, ...Object.values(this.hats), ...Object.values(this.tools)]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }

@@ -1,6 +1,6 @@
 import {
-  AdditiveBlending, BufferAttribute, BufferGeometry, Color, DirectionalLight, Fog, HemisphereLight, MathUtils,
-  PCFShadowMap, Points, PointsMaterial, Vector3, type Scene, type WebGLRenderer,
+  AdditiveBlending, BackSide, BufferAttribute, BufferGeometry, Color, DirectionalLight, Fog, HemisphereLight, MathUtils, Mesh,
+  PCFShadowMap, Points, PointsMaterial, ShaderMaterial, SphereGeometry, Vector3, type Scene, type WebGLRenderer,
 } from 'three';
 import { CSM } from 'three/addons/csm/CSM.js';
 import { Rng } from '../sim/rng';
@@ -15,7 +15,42 @@ const SKY: readonly Key[] = [
   [0, '#141b36'], [0.2, '#141b36'], [0.255, '#d99a8c'], [0.32, '#a9d8f2'],
   [0.69, '#a9d8f2'], [0.75, '#eea07c'], [0.81, '#141b36'], [1, '#141b36'],
 ];
+/** The sky overhead through the day: deeper than the haze at the horizon. */
+const ZENITH: readonly Key[] = [
+  [0, '#070b1e'], [0.2, '#070b1e'], [0.255, '#6f7fb8'], [0.32, '#5a9ad6'],
+  [0.69, '#5a9ad6'], [0.75, '#7d6fa8'], [0.81, '#070b1e'], [1, '#070b1e'],
+];
 const SUNRISE = 0.245, SUNSET = 0.765;
+
+/** A dome round the camera: haze at the horizon fading up to the zenith, and a glow round the sun. */
+function skyDome(): Mesh<SphereGeometry, ShaderMaterial> {
+  const m = new ShaderMaterial({
+    uniforms: { uTop: { value: new Color() }, uHorizon: { value: new Color() }, uSun: { value: new Vector3(0, 1, 0) }, uSunCol: { value: new Color() } },
+    vertexShader: /* glsl */ `
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uTop, uHorizon, uSunCol, uSun;
+      varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        vec3 c = mix(uHorizon, uTop, pow(smoothstep(-0.02, 0.75, d.y), 0.7));
+        float s = max(dot(d, uSun), 0.0);
+        c += uSunCol * (pow(s, 12.0) * 0.35 + pow(s, 600.0) * 1.2);
+        gl_FragColor = vec4(c, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    side: BackSide, depthWrite: false, depthTest: false, fog: false,
+  });
+  const dome = new Mesh(new SphereGeometry(1, 32, 16), m);
+  dome.frustumCulled = false;
+  dome.renderOrder = -2;
+  return dome;
+}
 const tmpA = new Color(), tmpB = new Color();
 
 function sample(keys: readonly Key[], t: number, out: Color): Color {
@@ -44,7 +79,8 @@ export class Sky {
   readonly sky = new Color();
   /** 0 by day, 1 at night (the prototype's nightF). */
   night = 0;
-  private hemi = new HemisphereLight('#eaf6ff', '#7a6a48', 1.5);
+  private hemi = new HemisphereLight('#dce8ff', '#6b6a40', 1.5);
+  private dome = skyDome();
   private key: DirectionalLight | null = null;
   /** Exposed for debugging through window.__hv.renderer.sky.csm. */
   readonly csm: CSM | null = null;
@@ -53,7 +89,7 @@ export class Sky {
   private lastFar = 0;
 
   constructor(private scene: Scene, gl: WebGLRenderer, private rig: CameraRig, q: Quality) {
-    scene.add(this.hemi);
+    scene.add(this.hemi, this.dome);
     scene.fog = new Fog(this.sky, 40, 120);
     scene.background = this.sky;
     gl.shadowMap.enabled = q.shadows !== 'none';
@@ -110,6 +146,9 @@ export class Sky {
     this.night = nightF(t);
     sample(SKY, d, this.sky);
     (this.scene.fog as Fog).color.copy(this.sky);
+    const du = this.dome.material.uniforms;
+    du.uHorizon!.value.copy(this.sky);
+    sample(ZENITH, d, du.uTop!.value);
 
     // Key light: the sun by day, the moon by night, dimming to nothing at the horizon so
     // the swap is invisible.
@@ -118,8 +157,8 @@ export class Sky {
     if (d > SUNRISE && d < SUNSET) {
       const p = (d - SUNRISE) / (SUNSET - SUNRISE), up = Math.sin(Math.PI * p);
       arc(p, MathUtils.degToRad(62), this.dir);
-      intensity = 2.7 * MathUtils.smoothstep(up, 0, 0.3);
-      col.set('#ffad78').lerp(tmpB.set('#fff2dc'), MathUtils.smoothstep(up, 0.1, 0.6));
+      intensity = 3.0 * MathUtils.smoothstep(up, 0, 0.3);
+      col.set('#ff9e66').lerp(tmpB.set('#ffe8c6'), MathUtils.smoothstep(up, 0.1, 0.6));
     } else {
       const p = ((d - SUNSET + 1) % 1) / (1 - SUNSET + SUNRISE), up = Math.sin(Math.PI * p);
       arc(p, MathUtils.degToRad(48), this.dir);
@@ -127,9 +166,14 @@ export class Sky {
       col.set('#a9b9ff');
     }
     const day = 1 - this.night;
-    this.hemi.intensity = 0.75 + 0.6 * day;
-    this.hemi.color.set('#4a5a96').lerp(tmpB.set('#eaf6ff'), day);
-    this.hemi.groundColor.set('#1e2236').lerp(tmpB.set('#7a6a48'), day);
+    this.hemi.intensity = 0.7 + 0.45 * day;
+    this.hemi.color.set('#4a5a96').lerp(tmpB.set('#d6e4ff'), day);
+    this.hemi.groundColor.set('#1e2236').lerp(tmpB.set('#6b6a40'), day);
+    du.uSun!.value.copy(this.dir);
+    du.uSunCol!.value.copy(col).multiplyScalar(d > SUNRISE && d < SUNSET ? MathUtils.smoothstep(intensity, 0, 1) : 0);
+    const cam = this.rig.camera;
+    this.dome.position.copy(cam.position);
+    this.dome.scale.setScalar(cam.far * 0.9);
     (this.stars.material as PointsMaterial).opacity = MathUtils.smoothstep(this.night, 0.3, 1);
     this.stars.position.copy(this.rig.camera.position);
 

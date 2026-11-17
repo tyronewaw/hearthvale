@@ -12,6 +12,8 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
   - phase 14: bigger buildings (2×2 work buildings, a compound for the great lodge)
   - phase 15: villager voices (made-up language; 48 lines made with VoxCPM2 by Claude in the cloud, at the user's request)
   - phase 16: pet sounds (cartoon sheep, monkey and hen; 42 clips made the same way, pitched by growth stage)
+  - phase 18: the "vibe pass" towards Black & White / Populous (the user's ask): smooth, painted rolling terrain, warmer light,
+    a gradient sky, and models made in Blender by Claude in the cloud (villagers, huts, the god hand, trees, the pets).
 
   Mobile polish (long-press scold, double-tap build, compact layout) is dropped: the game is PC-only, and nothing should send notifications to the user's phone.
 
@@ -27,6 +29,11 @@ A cosy 3D god game for the browser, **for PC** (the user's decision: mouse and k
 - `npm run voicesheet` rewrites the villager voice sheet (`voices/`) from `src/audio/voice-lines.json`; `npm run voices -- <zip or folder>` turns recordings (the user's, or `scripts/voicegen/` output) into game clips.
 - `npm run voicepreview` strings the clips together as the game plays them, for listening: `shots/voices-preview.mp3` (villagers) and `shots/pet-<kind>.mp3` (each pet's sounds at young pitch, then some at baby and grand pitch).
 - `scripts/voicegen/` (Python, `pip install -r scripts/voicegen/requirements.txt`, about 7 GB with PyTorch plus the 4.7 GB model): `design.py` designs the voices, and `gen.py` makes lines, best of N takes. Usage is in each file's docstring. Use the cloud environment **hearthvale**, which allows HuggingFace (huggingface.co and us.aws.cdn.hf.co).
+- `npm run vibeshots` takes look-review screenshots from the dev server (`shots/vibe-*.png`: village, close-up, wide, dusk,
+  autumn, villagers up close, the hand). `-- --q 'tm=agx&ex=1.2' --tag -agx` adds URL flags and a file suffix, for comparing looks.
+- `scripts/blender/` builds models in Blender, run as the `bpy` Python module (`python3.13 -m venv venv && venv/bin/pip install bpy`,
+  about 400 MB, no GPU needed). `venv/bin/python scripts/blender/<huts|villager|hand|trees>.py [--preview shots/blender-x.png]`
+  (also `pets`) rewrites `src/assets/models/<name>.json` and optionally renders a Cycles preview of exactly what the game gets.
 - `npm run balance` runs a headless scripted player for `DAYS` (default 30) and writes a day-by-day table to `shots/balance.txt`. It takes about 3 s.
 - Add `?fresh` to start a new world instead of loading the save, and `?nosave` to stop autosaving.
 
@@ -68,6 +75,7 @@ src/render/   three.js only, and it reads sim state
   water.ts    stylised sea: shore-distance texture (BFS from land, RepeatWrapping) → shallows, foam, sparkle
   flora.ts    instanced trees (3 kinds, canopy + trunk), flowers, rocks; seasonal colours
   clouds.ts   drifting instanced clouds that cast shadows
+  blendmodels.ts decodes the Blender-made models (src/assets/models/*.json): blendGeo(file, name) → geometry or null
   kit.ts      model kit: primitives + per-face colours → one merged vertex-coloured geometry; parts added
               with `tint` get a per-vertex tint mask
   models.ts   original tribal designs: huts (6 home levels, plus simpler far-LOD versions), Hearth, Farm,
@@ -90,7 +98,7 @@ src/render/   three.js only, and it reads sim state
               (open, reach, point, grip, hold, stroke, slap), leans with motion, casts a shadow
   scale.ts    sim→world mapping: STEP per level, SEA_FLOOR, WATER_Y, surfaceY/standY
   camera-rig.ts orbit camera around a wrapped focus; zoom also tilts and strengthens the bend
-  terrain-mesh.ts 8×8 chunks of 16×16 tiles, flat-shaded with per-triangle colour, seasonal palettes
+  terrain-mesh.ts 8×8 chunks of 16×16 tiles, smooth-shaded, corner colours, painted in the shader, seasonal palettes
   renderer.ts owns the scene; routes sim events to terrain, water and flora; hover marker
 src/physics/  physics.ts  Rapier world: 64 chunk heightfields on the torus, thrown bodies, buoyancy, settle
   throw.ts    throwVelocity() from the hand's trail; trimTrail()
@@ -116,6 +124,32 @@ legacy/       the 2D prototype (design reference; do not edit)
 - **Fixed tick.** The sim runs at 10 Hz (dt 0.1, the prototype's step, so its tuning numbers carry over). Each frame runs at most 8 ticks. Render interpolation of moving entities arrives with villagers in phase 3.
 - **Sim → outside only through events** (`terrain`, `toast`, `sfx`). UI and render never mutate the sim except through its command methods (`useTool`, …).
 - **Colours.** Flat tiles get a lighter "meadow" tone, which shows where homes and fields can go. Height bands follow the prototype's `pal()` thresholds, with one palette per season. Trees use the prototype's LEAF/PINE colours (rare pink blossom in spring, snow in winter).
+- **The look (phase 18, towards Black & White / Populous: The Beginning, with original art).**
+  - **Terrain** is smooth-shaded: normals from the heightmap per corner. Colours are per corner too: height bands blend smoothly,
+    corners blend towards meadow by how many of their four tiles are flat, and shores are sand.
+  - **Painted ground** in the terrain shader (`painterly`): warm and cool patches, brush strokes along x or z, dark tufts, and
+    earth then rock on steep slopes. Every noise layer is periodic in N (its frequency × N is a whole number), so the wrap seam
+    never shows. A `tc` attribute carries each corner's absolute tile position.
+  - **Light:** Neutral tone mapping (`?tm=none|aces|agx|neutral`, `?ex=` to compare), a warmer sun, a softer hemisphere fill.
+  - **Sky:** a dome round the camera (horizon haze up to a deeper zenith, `ZENITH` keys, and a glow round the sun), tone mapped
+    like the world so the fog meets it at the horizon.
+- **Blender-made models** (`scripts/blender/`, by Claude, original designs). Helpers in `hvblend.py`: `part()` (a bmesh with a
+  colour or colour function, tint, smooth or flat), `lathe`, `lumpy` (noise along normals), `triangles` (to game axes: Blender
+  z up / front -y → game y up / front +z), `export`, `preview` (Cycles).
+  - **Format:** one JSON per set: a colour palette (linear, ≤128) and per model base64 of int16 positions (1/4096), int8 normals
+    and a palette byte (bit 7 = tint). `blendGeo` returns null for a missing model, and every user falls back to its code-built
+    version, so a stale or partial file never breaks the game.
+  - **Huts:** keyed by the hut() call's measurements (`r|wallH|roofH|roof|posts|ropes|sx|tier|lod`, numbers as JS prints them).
+    `VARIANTS` in huts.py must list every hut() call in models.ts. Door glows, smoke and fire spots stay computed in models.ts.
+  - **Villagers:** rounded parts with the same pivots as the boxes, white with dark details (the instance colour multiplies).
+    Only villagers within `FINE_R` (13) of the camera, up to `FINE_CAP` (160), get them; the rest stay boxes.
+  - **Hand:** palm and finger segments by name (`palm`, `f<finger>s<seg>`, `t0`, `t1`); hand.ts still poses them.
+  - **Trees:** lumpy leafy crowns, bushes and trunks for near trees (smooth, lighter on top); pines stay crisp code-built cones.
+  - **Pets:** `<kind><stage>_<body|head|leg|tail>`, with the code-built pieces' pivots; pets.ts keeps headAt, legs, tailAt and
+    the poses. `tube()` (a bevelled curve) makes tails, horns and feathers.
+  - **Size:** the model JSON is about 1.1 MB in the bundle (huts 544 KB, pets 447 KB). If it grows, fetch it as binary instead.
+  - Building, hand and near-tree materials are smooth (no `flatShading`): Blender parts bring their own normals, and kit boxes
+    and octahedra are faceted anyway.
 - **Materials.** Always create world materials through `worldMat()`. CSM's `setupMaterial` replaces `onBeforeCompile`, so the order is CSM, then bend, then any `extendShader` patches. Shadow casters use `castsShadow(mesh)`, which sets the bent depth material; without it, shadows slide off away from the focus.
 - **Shadows.** The high tier uses three's CSM (three cascades, fade on, `maxFar` follows zoom). Medium and low use one directional shadow map centred on the focus and snapped to its texel grid. The terrain receives shadows but doesn't cast them: casting would add 64 draw calls per shadow pass, and the facets already show relief. r187 removed `PCFSoftShadowMap`, so use `PCFShadowMap`.
 - **Instanced flora layout.** Instances use their chunk's nearest image (the same rule as the terrain). They are only re-laid out when that layout changes (the focus crosses a line at 8 + 16k), the flora changes, or the season turns.
@@ -210,11 +244,14 @@ legacy/       the 2D prototype (design reference; do not edit)
 - **Gravity is 14 u/s²** (1 unit ≈ a villager's height × 2): snappy arcs, not floaty.
 - **Culling.** `GameRenderer.cull()` tests each of the 64 chunks against the camera frustum using its *bent* bounds: the drop is lowest at the far corner and highest at the near one, plus 2.2 headroom for trees and huts. The terrain hides culled chunks, and the flora only lays out instances in visible chunks. Instanced meshes stay `frustumCulled = false` because their bounds are unbent.
 - **Tree LOD.** Trees more than 28 units (horizontally) from the camera use a simple canopy with no trunk. The flora re-lays out when the visible chunk set or the camera's 4-unit LOD cell changes.
-- **Budgets (`npm run perf`, 1280×800, village of about 80).** Keep high under 150 calls and 300k triangles.
+- **Budgets (`npm run perf`, 1280×800, village of about 80).** Keep high under 150 calls and 400k triangles (raised from 300k in
+  phase 18: the game is PC-only, and medium and low stay lean for weaker GPUs).
   - before culling: high 458k triangles at every zoom
   - after culling (phase 7): high 137k / 173k / 211k triangles (94–124 calls) at zoom 0.2 / 0.45 / 1; medium 93k–141k triangles (66–96 calls)
   - phase 13 detailed buildings, with home LOD and the tint mask: high 193k / 229k / 247k triangles (118 / 125 / 147 calls); medium 123k–163k triangles (80–109 calls)
   - phase 14 (2×2 buildings, lodge compound): high 199k / 235k / 248k triangles (118 / 125 / 143 calls); medium 125k–164k triangles (80–107 calls)
+  - phase 18 (Blender huts, villagers, hand, trees): high 324k / 363k / 328k triangles (118 / 126 / 144 calls); medium 188k–212k (81–108 calls).
+    Shadows multiply caster triangles (three CSM cascades), so detail on huts and trees costs about 3×.
 - **WebGPU is deferred.** The bend uses `onBeforeCompile`, which WebGPURenderer doesn't support (it needs TSL).
 - **The Red tribe** (phase 10, the user's design choice: "win them over"). Nobody fights.
   - Every home, struct and villager has `tribe` (0 ours, 1 Red). Red homes also have `bel` (0..100, how won over they are). `fixTribes` gives pre-tribe saves tribe 0.

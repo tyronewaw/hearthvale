@@ -6,7 +6,9 @@ import { alignment, petStage, type Pet, type PetKind } from '../sim/pet';
 import { isWater } from '../sim/terrain';
 import { wd, type State } from '../sim/world';
 import { bendDrop } from './bend';
+import { blendGeo } from './blendmodels';
 import { Kit } from './kit';
+import petFile from '../assets/models/pets.json';
 import { castsShadow, worldMat } from './materials';
 import { WATER_Y, surfaceY } from './scale';
 
@@ -232,8 +234,14 @@ export class PetView {
     this.stage = stage;
     if (this.model) for (const g of [this.model.body, this.model.head, this.model.leg, this.model.tail]) g?.dispose();
     this.model = MODELS[kind](stage);
+    // The Blender-made pieces (scripts/blender/pets.py), where the model file has them.
+    const k = `${kind}${stage}_`, m = this.model;
+    m.body = blendGeo(petFile, k + 'body') ?? m.body;
+    m.head = blendGeo(petFile, k + 'head') ?? m.head;
+    m.leg = blendGeo(petFile, k + 'leg') ?? m.leg;
+    if (m.tail) m.tail = blendGeo(petFile, k + 'tail') ?? m.tail;
     this.body.clear();
-    const mat = worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    const mat = worldMat(new MeshLambertMaterial({ vertexColors: true }));
     const mk = (g: BufferGeometry) => {
       const m = new Mesh(g, mat);
       castsShadow(m);
