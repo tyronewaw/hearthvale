@@ -3,6 +3,8 @@ import {
 } from 'three';
 import type { StructKind } from '../sim/defs';
 import { Kit, type FaceColour, type Place } from './kit';
+import { blendGeo } from './blendmodels';
+import hutFile from '../assets/models/huts.json';
 
 /** Colours from the prototype's hut sprites. */
 const THATCH = ['#ecca72', '#d4a64a', '#a9792e'];
@@ -86,6 +88,14 @@ interface HutOpts {
  */
 function hut(m: Two, r: number, wallH: number, roofH: number, at: [number, number, number] = [0, 0, 0], o: HutOpts = {}): Model['glows'][number] {
   const k = m.k, t = m.t, roof = o.roof ?? THATCH, sx = o.sx ?? 1, lod = !!o.lod, seg = lod ? 7 : Math.max(9, Math.round(r * 20));
+  // The Blender-made hut for these measurements (scripts/blender/huts.py), if there is one.
+  const key = [r, wallH, roofH, roof === THATCH2 ? 'THATCH2' : 'THATCH', o.posts ?? 4, o.ropes ?? 2, sx, o.tier ? 1 : 0, lod ? 1 : 0].join('|');
+  const made = blendGeo(hutFile, key);
+  if (made) {
+    k.addGeo(made, { pos: at });
+    const dw = r * 0.42, dh = wallH * 0.8, y0 = at[1] + 0.06, dz = at[2] + r * 0.99;
+    return lod ? [at[0], y0 + dh / 2, dz + 0.014, 0, dw * 0.5, dh * 0.85] : [at[0] + dw * 0.18, y0 + dh / 2, dz + 0.014, 0, dw * 0.5, dh * 0.85];
+  }
   const S3: [number, number, number] = [sx, 1, 1];
   if (!lod) plinth(k, r, at, sx, seg);
   const y0 = at[1] + 0.06;

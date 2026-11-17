@@ -1,6 +1,6 @@
 import {
   Box3, ConeGeometry, DodecahedronGeometry, Frustum, IcosahedronGeometry, CylinderGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
-  MeshLambertMaterial, NoToneMapping, Quaternion, Scene, Vector3, WebGLRenderer, type BufferGeometry, type Fog,
+  MeshLambertMaterial, ACESFilmicToneMapping, AgXToneMapping, NeutralToneMapping, NoToneMapping, Quaternion, Scene, Vector3, WebGLRenderer, type BufferGeometry, type Fog,
 } from 'three';
 import type { FlyerPose } from '../physics/physics';
 import { Hand, type HandPose } from './hand';
@@ -89,7 +89,11 @@ export class GameRenderer {
   constructor(canvas: HTMLCanvasElement, private S: State, private rig: CameraRig, readonly q: Quality) {
     this.gl = new WebGLRenderer({ canvas, antialias: q.antialias, powerPreference: 'high-performance' });
     this.gl.setPixelRatio(q.pixelRatio);
-    this.gl.toneMapping = NoToneMapping;
+    // Neutral tone mapping rolls bright light off softly and keeps the colours rich.
+    // ?tm=none|aces|agx|neutral and ?ex=<exposure> override it (for comparing looks).
+    const qs = new URLSearchParams(location.search), tm = qs.get('tm') ?? 'neutral';
+    this.gl.toneMapping = { none: NoToneMapping, aces: ACESFilmicToneMapping, agx: AgXToneMapping, neutral: NeutralToneMapping }[tm] ?? NeutralToneMapping;
+    this.gl.toneMappingExposure = Number(qs.get('ex')) || (tm === 'none' ? 1 : tm === 'neutral' ? 1.0 : 1.1);
 
     // The sky owns the lights and must exist before any world material (it registers CSM).
     this.sky = new Sky(this.scene, this.gl, rig, q);
@@ -222,7 +226,7 @@ export class GameRenderer {
     this.trees.count = nt;
     this.rocks.count = nr;
     this.trees.instanceMatrix.needsUpdate = this.rocks.instanceMatrix.needsUpdate = true;
-    this.villagers.update(S, fx, fz, time, view.alpha, this.rig.dist * 1.25 + 14, extra);
+    this.villagers.update(S, fx, fz, time, view.alpha, this.rig.dist * 1.25 + 14, extra, this.rig.camera.position);
     this.pet.update(S, fx, fz, time, view.alpha);
     this.effects.update(S, fx, fz, time, this.sky.night);
     this.border.update(S, fx, fz, time, view.dt);

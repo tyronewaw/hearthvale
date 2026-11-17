@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshLambertMaterial, SRGBColorSpace } from 'three';
 import { hash2 } from '../sim/rng';
-import { CHUNK, CHUNKS, idx, wd, type State } from '../sim/world';
-import { worldMat } from './materials';
+import { CHUNK, CHUNKS, N, idx, wd, type State } from '../sim/world';
+import { extendShader, worldMat } from './materials';
 import { yOf } from './scale';
 
 type RGB = readonly [number, number, number];
@@ -22,32 +22,119 @@ interface Palette {
  * but spread further apart so height reads clearly in 3D.
  */
 const PALS: readonly Palette[] = [
-  { sand: [232, 206, 148], meadow: [168, 214, 108], g1: [128, 196, 92], g2: [96, 166, 78], g3: [86, 134, 82], rock: [150, 136, 120], snow: [247, 249, 255], seabed: [96, 150, 150] },
-  { sand: [236, 208, 146], meadow: [176, 206, 96], g1: [116, 182, 74], g2: [88, 152, 66], g3: [80, 124, 72], rock: [150, 136, 120], snow: [247, 249, 255], seabed: [96, 150, 150] },
-  { sand: [228, 200, 146], meadow: [208, 190, 104], g1: [194, 172, 94], g2: [170, 146, 80], g3: [150, 114, 76], rock: [146, 130, 116], snow: [247, 249, 255], seabed: [96, 146, 146] },
-  { sand: [222, 214, 198], meadow: [240, 244, 250], g1: [232, 238, 246], g2: [220, 228, 240], g3: [206, 214, 230], rock: [190, 196, 212], snow: [250, 252, 255], seabed: [92, 140, 150] },
+  { sand: [226, 202, 150], meadow: [160, 196, 104], g1: [118, 172, 84], g2: [92, 146, 70], g3: [86, 122, 74], rock: [138, 122, 104], snow: [242, 244, 250], seabed: [92, 140, 136] },
+  { sand: [230, 204, 146], meadow: [170, 190, 94], g1: [112, 160, 70], g2: [88, 136, 62], g3: [80, 114, 66], rock: [140, 122, 102], snow: [242, 244, 250], seabed: [92, 140, 136] },
+  { sand: [222, 196, 146], meadow: [198, 176, 100], g1: [182, 158, 88], g2: [160, 132, 76], g3: [138, 104, 72], rock: [134, 116, 102], snow: [242, 244, 250], seabed: [92, 136, 136] },
+  { sand: [218, 210, 196], meadow: [236, 240, 246], g1: [226, 232, 242], g2: [214, 222, 236], g3: [200, 208, 226], rock: [150, 146, 150], snow: [248, 250, 255], seabed: [90, 132, 142] },
 ];
 
 const TRIS_PER_CHUNK = CHUNK * CHUNK * 2;
 const VERTS_PER_CHUNK = TRIS_PER_CHUNK * 3;
 const tmp = new Color();
 
-function triColour(PAL: Palette, ha: number, hb: number, hc: number): RGB {
-  if (!(ha | hb | hc)) return PAL.seabed;
-  if (!ha || !hb || !hc) return PAL.sand;
-  const av = (ha + hb + hc) / 3;
-  if (ha === hb && hb === hc && av < 6.4) return PAL.meadow;
-  return av < 2.4 ? PAL.g1 : av < 4.4 ? PAL.g2 : av < 6.4 ? PAL.g3 : av < 8 ? PAL.rock : PAL.snow;
+/** Grass, hill, rock and snow blend smoothly with height, so slopes read as rolling hills. */
+function heightColour(PAL: Palette, h: number, out: number[]): void {
+  const keys: [number, RGB][] = [[1, PAL.g1], [3, PAL.g2], [5.4, PAL.g3], [7.2, PAL.rock], [8.4, PAL.snow]];
+  let a = keys[0]!, b = keys[0]!;
+  for (const k of keys) {
+    if (k[0] <= h) a = k;
+    if (k[0] >= h) { b = k; break; }
+    b = k;
+  }
+  const t = b[0] === a[0] ? 0 : (h - a[0]) / (b[0] - a[0]);
+  for (let i = 0; i < 3; i++) out[i] = a[1][i]! + (b[1][i]! - a[1][i]!) * t;
 }
 
 /**
- * The planet's ground: CHUNKS×CHUNKS meshes of CHUNK×CHUNK tiles, flat-shaded with one
- * colour per triangle. Each chunk is drawn at its nearest image to the camera focus, so the
- * world wraps seamlessly in both directions.
+ * One corner's colour. Shores are sand (the sea-floor corners next to land, and the land
+ * corners next to sea), the open sea floor is seabed, and land blends by height towards
+ * the lighter meadow by how many of the corner's four tiles are flat (where homes fit).
+ */
+function cornerColour(PAL: Palette, H: Uint8Array | Int8Array | number[], x: number, z: number, out: number[]): void {
+  const h = H[idx(x, z)]!;
+  let wet = 0, dry = 0;
+  for (let dz = -1; dz <= 1; dz++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (H[idx(x + dx, z + dz)]! > 0) dry++;
+      else wet++;
+    }
+  if (h === 0 || (h === 1 && wet)) {
+    const c = h === 0 && !dry ? PAL.seabed : PAL.sand;
+    out[0] = c[0]; out[1] = c[1]; out[2] = c[2];
+    return;
+  }
+  heightColour(PAL, h, out);
+  let flat = 0;
+  for (const [ox, oz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]] as const) {
+    const a = H[idx(x + ox, z + oz)]!;
+    if (a > 0 && a < 6.4 && a === H[idx(x + ox + 1, z + oz)] && a === H[idx(x + ox, z + oz + 1)] && a === H[idx(x + ox + 1, z + oz + 1)]) flat++;
+  }
+  const f = (flat / 4) * 0.8;
+  for (let i = 0; i < 3; i++) out[i] = out[i]! + (PAL.meadow[i]! - out[i]!) * f;
+}
+
+/**
+ * Painted-landscape shading on the GPU: soft patches of warmer and cooler grass, brush
+ * strokes, speckle, and bare earth and rock on steep slopes. All of it is periodic in the
+ * planet's size, so the wrap seam never shows.
+ */
+function painterly(m: MeshLambertMaterial, rock: { value: Color }): MeshLambertMaterial {
+  return extendShader(m, 'painterly', (sh) => {
+    sh.uniforms.uRock = rock;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 tc;\nvarying vec2 vTc;\nvarying float vUp;\nvarying float vY;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTc = tc;\nvUp = normal.y;\nvY = position.y;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec2 vTc;
+varying float vUp;
+varying float vY;
+uniform vec3 uRock;
+float tHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// value noise whose lattice repeats every 'per' cells
+float tNoise(vec2 p, vec2 per) {
+  vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+  float a = tHash(mod(i, per)), b = tHash(mod(i + vec2(1.0, 0.0), per));
+  float c = tHash(mod(i + vec2(0.0, 1.0), per)), d = tHash(mod(i + vec2(1.0, 1.0), per));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  const float W = ${N}.0;
+  vec2 p = vTc;
+  float big = tNoise(p / 16.0, vec2(W / 16.0)) * 0.65 + tNoise(p / 8.0, vec2(W / 8.0)) * 0.35;
+  float mid = tNoise(p, vec2(W));
+  // brush strokes: noise stretched along x or z, the direction changing in patches
+  float sx = tNoise(vec2(p.x * 1.5, p.y * 6.0), vec2(W * 1.5, W * 6.0));
+  float sz = tNoise(vec2(p.x * 6.0, p.y * 1.5), vec2(W * 6.0, W * 1.5));
+  float dirMix = smoothstep(0.35, 0.65, tNoise(p / 4.0 + 3.0, vec2(W / 4.0)));
+  float stroke = mix(sx, sz, dirMix);
+  float speck = tNoise(p * 7.0, vec2(W * 7.0));
+  vec3 c = diffuseColor.rgb;
+  c *= mix(vec3(0.86, 0.94, 1.0), vec3(1.1, 1.04, 0.86), big);   // cool and warm patches
+  c *= 0.9 + 0.16 * mid;
+  c *= 0.91 + 0.18 * stroke;
+  c *= 1.0 - 0.14 * smoothstep(0.7, 0.95, speck);                // dark tufts
+  // steep ground shows earth, then rock (never on the beach or the sea floor)
+  float land = smoothstep(0.25, 0.9, vY);
+  float steep = (1.0 - vUp) + (stroke - 0.5) * 0.08;
+  c = mix(c, uRock * vec3(1.06, 0.98, 0.86), land * smoothstep(0.13, 0.2, steep) * 0.45);
+  c = mix(c, uRock * (0.9 + 0.2 * mid), land * smoothstep(0.2, 0.3, steep) * 0.85);
+  diffuseColor.rgb = c;
+}`);
+  });
+}
+
+/**
+ * The planet's ground: CHUNKS×CHUNKS meshes of CHUNK×CHUNK tiles. Smooth-shaded rolling
+ * land with colours blended by height and a painted texture on top; flat tiles keep their
+ * lighter meadow colour so you can see where homes fit. Each chunk is drawn at its nearest
+ * image to the camera focus, so the world wraps seamlessly in both directions.
  */
 export class TerrainMesh {
   readonly group = new Group();
-  readonly material = worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  private rock = { value: new Color() };
+  readonly material = painterly(worldMat(new MeshLambertMaterial({ vertexColors: true })), this.rock);
   private chunks: Mesh[] = [];
   /** Lowest and highest world y in each chunk (for culling). */
   readonly yMin = new Float32Array(CHUNKS * CHUNKS);
@@ -61,10 +148,11 @@ export class TerrainMesh {
       g.setAttribute('position', new BufferAttribute(new Float32Array(VERTS_PER_CHUNK * 3), 3));
       g.setAttribute('normal', new BufferAttribute(new Float32Array(VERTS_PER_CHUNK * 3), 3));
       g.setAttribute('color', new BufferAttribute(new Float32Array(VERTS_PER_CHUNK * 3), 3));
+      g.setAttribute('tc', new BufferAttribute(new Float32Array(VERTS_PER_CHUNK * 2), 2));
       const m = new Mesh(g, this.material);
       m.matrixAutoUpdate = false;
       // Receive only: casting would redraw all 64 chunks in every shadow pass, and the
-      // faceted shading already shows the relief.
+      // shading already shows the relief.
       m.receiveShadow = true;
       // The bend moves far geometry down into view, so unbent bounds would cull it wrongly.
       m.frustumCulled = false;
@@ -73,6 +161,8 @@ export class TerrainMesh {
       this.group.add(m);
       this.rebuild(c);
     }
+    const r = this.pal.rock;
+    this.rock.value.setRGB(r[0] / 255, r[1] / 255, r[2] / 255, SRGBColorSpace);
   }
 
   setState(S: State): void {
@@ -85,6 +175,7 @@ export class TerrainMesh {
     const p = PALS[se] ?? PALS[0]!;
     if (p === this.pal) return;
     this.pal = p;
+    this.rock.value.setRGB(p.rock[0] / 255, p.rock[1] / 255, p.rock[2] / 255, SRGBColorSpace);
     this.rebuildAll();
   }
 
@@ -98,37 +189,37 @@ export class TerrainMesh {
     const pos = g.getAttribute('position') as BufferAttribute;
     const nor = g.getAttribute('normal') as BufferAttribute;
     const col = g.getAttribute('color') as BufferAttribute;
-    const P = pos.array as Float32Array, NR = nor.array as Float32Array, C = col.array as Float32Array;
+    const tca = g.getAttribute('tc') as BufferAttribute;
+    const P = pos.array as Float32Array, NR = nor.array as Float32Array, C = col.array as Float32Array, T = tca.array as Float32Array;
     const cx = (c % CHUNKS) * CHUNK, cz = ((c / CHUNKS) | 0) * CHUNK, H = this.S.h;
-    let o = 0;
-    const put = (lx: number, h: number, lz: number) => {
-      P[o] = lx;
-      P[o + 1] = yOf(h);
-      P[o + 2] = lz;
-      o += 3;
-    };
+    const Y = (x: number, z: number) => yOf(H[idx(x, z)]!);
+    const vc = [0, 0, 0];
+    let o = 0, t = 0;
     const tri = (x: number, z: number, h: number[], order: readonly [number, number, number], salt: number) => {
-      const start = o;
-      for (const k of order) put(x + (k === 1 || k === 2 ? 1 : 0), h[k]!, z + (k >= 2 ? 1 : 0));
-      // face normal
-      const ax = P[start]!, ay = P[start + 1]!, az = P[start + 2]!;
-      const ux = P[start + 3]! - ax, uy = P[start + 4]! - ay, uz = P[start + 5]! - az;
-      const vx = P[start + 6]! - ax, vy = P[start + 7]! - ay, vz = P[start + 8]! - az;
-      let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      const l = Math.hypot(nx, ny, nz) || 1;
-      nx /= l; ny /= l; nz /= l;
-      const rgb = triColour(this.pal, h[order[0]]!, h[order[1]]!, h[order[2]]!);
-      // A little per-face variation keeps the low-poly look hand-made, not noisy.
+      // A little per-face variation keeps it hand-made.
       const q = hash2(cx + x + salt * 7919, cz + z) % 17;
-      const m = q === 0 ? 0.95 : q === 1 ? 1.04 : 1;
-      tmp.setRGB((rgb[0] * m) / 255, (rgb[1] * m) / 255, (rgb[2] * m) / 255, SRGBColorSpace);
-      for (let i = 0; i < 3; i++) {
-        NR[start + i * 3] = nx;
-        NR[start + i * 3 + 1] = ny;
-        NR[start + i * 3 + 2] = nz;
-        C[start + i * 3] = tmp.r;
-        C[start + i * 3 + 1] = tmp.g;
-        C[start + i * 3 + 2] = tmp.b;
+      const m = q === 0 ? 0.96 : q === 1 ? 1.03 : 1;
+      for (const k of order) {
+        const vx = x + (k === 1 || k === 2 ? 1 : 0), vz = z + (k >= 2 ? 1 : 0), wx = cx + vx, wz = cz + vz;
+        P[o] = vx;
+        P[o + 1] = yOf(h[k]!);
+        P[o + 2] = vz;
+        // smooth normal from the heights around this corner
+        let nx = (Y(wx - 1, wz) - Y(wx + 1, wz)) * 0.5, nz = (Y(wx, wz - 1) - Y(wx, wz + 1)) * 0.5;
+        const l = Math.hypot(nx, 1, nz);
+        nx /= l;
+        NR[o] = nx;
+        NR[o + 1] = 1 / l;
+        NR[o + 2] = nz / l;
+        cornerColour(this.pal, H, wx, wz, vc);
+        tmp.setRGB((vc[0]! * m) / 255, (vc[1]! * m) / 255, (vc[2]! * m) / 255, SRGBColorSpace);
+        C[o] = tmp.r;
+        C[o + 1] = tmp.g;
+        C[o + 2] = tmp.b;
+        T[t] = wx;
+        T[t + 1] = wz;
+        o += 3;
+        t += 2;
       }
     };
     const h = [0, 0, 0, 0];
@@ -152,7 +243,7 @@ export class TerrainMesh {
     }
     this.yMin[c] = lo;
     this.yMax[c] = hi;
-    pos.needsUpdate = nor.needsUpdate = col.needsUpdate = true;
+    pos.needsUpdate = nor.needsUpdate = col.needsUpdate = tca.needsUpdate = true;
     g.computeBoundingSphere();
     g.computeBoundingBox();
   }

@@ -56,6 +56,11 @@ export class Kit {
     return this.addColoured(g, at);
   }
 
+  /** Add a ready-coloured geometry (position, normal, color and tint attributes), placed. */
+  addGeo(g: BufferGeometry, at: Place = {}): this {
+    return this.addColoured(g, at);
+  }
+
   private addColoured(g: BufferGeometry, at: Place): this {
     const sc = at.scale ?? 1;
     m4.compose(

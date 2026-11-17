@@ -7,7 +7,9 @@ Every third-party asset shipped with the game is listed here. Only add CC0 asset
 | Pixelify Sans (font) | [@fontsource/pixelify-sans](https://www.npmjs.com/package/@fontsource/pixelify-sans); © 2021 The Pixelify Sans Project Authors ([github.com/eifetx/Pixelify-Sans](https://github.com/eifetx/Pixelify-Sans)) | SIL Open Font License 1.1 (`node_modules/@fontsource/pixelify-sans/LICENSE`) | All UI text. Self-hosted so the game works offline. |
 
 ## Made for this game (no third-party licence)
-- All 3D models are built in code: terrain, water, trees, huts and buildings, villagers, and the god hand.
+- All 3D models are original, made for this game: built in code (terrain, water, buildings, far trees) or made in
+  Blender by Claude from scripts in `scripts/blender/` (huts, villagers up close, the god hand, near trees, pets), exported to
+  `src/assets/models/*.json`. Blender (GPL) is only the tool: its licence does not cover what it makes.
 - Toolbar icons: pixel sprites from the original prototype (`src/ui/icons.ts`).
 - Pet portraits: the prototype's pixel pets (`src/ui/petcard.ts`).
 - App icons (`public/icons/*.png`): a pixel-art hut drawn in code by `scripts/icons.mjs`.

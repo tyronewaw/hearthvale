@@ -1,7 +1,9 @@
 import {
   BoxGeometry, CylinderGeometry, Group, Mesh, MeshLambertMaterial, Object3D, SphereGeometry, Vector3, type Scene,
 } from 'three';
+import { blendGeo } from './blendmodels';
 import { Kit } from './kit';
+import handFile from '../assets/models/hand.json';
 import { castsShadow, worldMat } from './materials';
 
 export type HandPose = 'open' | 'reach' | 'point' | 'grip' | 'hold' | 'stroke' | 'slap';
@@ -63,9 +65,11 @@ export class Hand {
   private gripLocal = new Vector3(0, -0.34, -0.14);
 
   constructor(scene: Scene) {
-    const mat = worldMat(new MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-    const mesh = (k: Kit) => {
-      const m = new Mesh(k.build(), mat);
+    // Smooth-shaded: the hand was made in Blender (scripts/blender/hand.py); the boxy kit
+    // pieces below are the fallback for any piece the model file lacks.
+    const mat = worldMat(new MeshLambertMaterial({ vertexColors: true }));
+    const mesh = (k: Kit, name: string) => {
+      const m = new Mesh(blendGeo(handFile, name) ?? k.build(), mat);
       castsShadow(m);
       m.frustumCulled = false;
       return m;
@@ -78,28 +82,28 @@ export class Hand {
     // a short forearm trailing back toward the viewer (bottom of the screen), as in B&W
     palm.add(new CylinderGeometry(0.15, 0.17, 0.62, 8), SKIN, { pos: [0, 0.07, 0.5], rot: [-1.32, 0, 0] });
     palm.add(new CylinderGeometry(0.18, 0.18, 0.09, 10), GOLD, { pos: [0, 0.1, 0.62], rot: [-1.32, 0, 0] });
-    this.wrist.add(mesh(palm));
-    for (const [x, lens, w] of FINGERS) {
+    this.wrist.add(mesh(palm, 'palm'));
+    FINGERS.forEach(([x, lens, w], f) => {
       const chain: Object3D[] = [];
       let parent: Object3D = this.wrist, z = -0.2;
       lens.forEach((len, i) => {
         const j = new Object3D();
         j.position.set(i === 0 ? x : 0, i === 0 ? 0.01 : 0, z);
         parent.add(j);
-        j.add(mesh(segGeo(len, w, i === 2)));
+        j.add(mesh(segGeo(len, w, i === 2), `f${f}s${i}`));
         chain.push(j);
         parent = j;
         z = -len;
       });
       this.joints.push(chain);
-    }
+    });
     let parent: Object3D = this.wrist;
     [0.14, 0.11].forEach((len, i) => {
       const j = new Object3D();
       if (i === 0) j.position.set(-0.22, -0.02, 0.06);
       else j.position.set(0, 0, -0.14);
       parent.add(j);
-      j.add(mesh(segGeo(len, 0.095, i === 1)));
+      j.add(mesh(segGeo(len, 0.095, i === 1), `t${i}`));
       this.thumb.push(j);
       parent = j;
     });
