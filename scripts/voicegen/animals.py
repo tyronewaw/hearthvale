@@ -32,8 +32,11 @@ SPECIES = {
               "eat": "Chewing gum mouth close", "cheer_src": None},
     "chicken": {"src": ["Chickens demanding food", "Hen announcing", "Hens leaving coop", "মুরগির"], "cls": ["Chicken, rooster", "Cluck", "Fowl"],
                 "eat": "Chickens demanding food", "cheer_src": ["Medium rooster crowing", "Small rooster crowing"]},
-    "monkey": {"src": ["Capuchins", "Pant-hoot"], "cls": ["Animal", "Wild animals"],
-               "eat": "Chewing gum mouth close", "cheer_src": ["Pant-hoot"]},
+    # wild capuchins, macaques and spider monkeys from iNaturalist, with gibbons whooping for a cheer
+    "monkey": {"src": ["Capuchins", "iNat Sapajus", "iNat Cebus", "iNat Macaca", "iNat Ateles"],
+               "cls": ["Animal", "Wild animals", "Squeal", "Squeak", "Whoop", "Hoot"],
+               "not": ["Bird vocalization, bird call, bird song", "Insect", "Cricket", "Frog", "Rain"],
+               "eat": "Chewing gum mouth close", "cheer_src": ["Pant-hoot", "iNat Hylobates"]},
 }
 # Classes that mean the cut is mostly something else.
 NOT = ["Speech", "Silence", "Wind", "Vehicle", "Music", "Rustle", "Static", "Noise", "Hum"]
@@ -62,6 +65,8 @@ def calls(y: np.ndarray) -> list[tuple[int, int]]:
             merged.append([s, e])
     pad = int(0.04 * SR)
     out = [(max(0, s - pad), min(len(y), e + pad)) for s, e in merged if 0.18 * SR <= e - s <= 2.6 * SR]
+    if len(y) > 20 * SR:  # long field recordings have plenty of quiet gaps to split at
+        return out
     for w in (0.5, 0.9, 1.4):
         n = int(w * SR)
         out += [(s, s + n) for s in range(0, len(y) - n, int(0.25 * SR))]
@@ -77,6 +82,10 @@ def overlap(a: tuple[int, int], b: tuple[int, int]) -> float:
     return max(0, min(a[1], b[1]) - max(a[0], b[0])) / min(a[1] - a[0], b[1] - b[0])
 
 
+# Long field recordings: only this much of each is searched for calls.
+MAX_SECONDS = 75
+
+
 class Judge:
     def __init__(self, model_dir: str):
         self.fe = ASTFeatureExtractor.from_pretrained(model_dir)
@@ -89,9 +98,9 @@ class Judge:
             x = self.fe(y16, sampling_rate=16000, return_tensors="pt")
             return torch.sigmoid(self.m(**x).logits)[0].numpy()
 
-    def score(self, p: np.ndarray, cls: list[str]) -> tuple[float, str]:
+    def score(self, p: np.ndarray, cls: list[str], extra_not: list[str] = ()) -> tuple[float, str]:
         good = max(p[self.idx[c]] for c in cls)
-        bad = max(p[self.idx[c]] for c in NOT if c in self.idx)
+        bad = max(p[self.idx[c]] for c in [*NOT, *extra_not] if c in self.idx)
         top = self.m.config.id2label[int(p.argmax())]
         return float(good - 0.7 * bad), top
 
@@ -124,7 +133,7 @@ def main() -> None:
     by_title = {o["title"][5:]: o for o in sources}
     find = lambda pre: [o for t, o in by_title.items() if t.startswith(pre) and os.path.exists(os.path.join(base, o["file"]))]
 
-    def cuts(prefixes: list[str], cls: list[str]) -> list[dict]:
+    def cuts(prefixes: list[str], cls: list[str], extra_not: list[str] = ()) -> list[dict]:
         """The clearest calls in these recordings, best first. A call under 12 dB above the
         recording's background is left out (levelling it would bring the hiss up too), and
         quieter calls rank lower. Within each length (short, medium, long) no two overlap."""
@@ -134,7 +143,7 @@ def main() -> None:
                 if o["title"] in seen:  # "Sheep bleat" also matches "Sheep bleating"
                     continue
                 seen.add(o["title"])
-                y = load(os.path.join(base, o["file"]))
+                y = load(os.path.join(base, o["file"]))[: MAX_SECONDS * SR]
                 bg = floor(y)
                 cand = []
                 for s, e in calls(y):
@@ -143,7 +152,7 @@ def main() -> None:
                     snr = 20 * np.log10(rms / bg)
                     if snr < 12:
                         continue
-                    sc, top = judge.score(judge.probs(seg), cls)
+                    sc, top = judge.score(judge.probs(seg), cls, extra_not)
                     cand.append({"score": sc, "rank": sc + 0.01 * (min(snr, 35) - 25), "seg": seg, "dur": (e - s) / SR,
                                  "where": f"{o['title'][5:40]} @{s / SR:.1f}s", "top": top, "snr": snr, "file": o["title"], "iv": (s, e)})
                 kept: list[dict] = []
@@ -155,7 +164,7 @@ def main() -> None:
         return sorted(res, key=lambda c: -c["rank"])
 
     for kind, sp in SPECIES.items():
-        pool = [c for c in cuts(sp["src"], sp["cls"]) if c["score"] > 0.05]
+        pool = [c for c in cuts(sp["src"], sp["cls"], sp.get("not", [])) if c["score"] > 0.05]
         log(f"== {kind}: {len(pool)} usable calls")
         for c in pool[:12]:
             log(f"   {c['score']:.2f} {c['dur']:4.2f}s {c['snr']:3.0f} dB top={c['top']} | {c['where']}")
@@ -186,7 +195,7 @@ def main() -> None:
         clips["play"] = [(np.concatenate([shape(a["seg"], 1.06), gap, shape(b["seg"], 1.12)]), f"{a['where']} + {b['where']}")
                          for a, b in ((sh[0], sh[1 % len(sh)]), (sh[2 % len(sh)], sh[3 % len(sh)]))]
         if sp["cheer_src"]:
-            crow = [c for c in cuts(sp["cheer_src"], sp["cls"] + (["Crowing, cock-a-doodle-doo"] if kind == "chicken" else [])) if c["score"] > 0.05]
+            crow = [c for c in cuts(sp["cheer_src"], sp["cls"] + (["Crowing, cock-a-doodle-doo"] if kind == "chicken" else []), sp.get("not", [])) if c["score"] > 0.05]
             ch = pick(0.6, 2.6, among=sorted(crow, key=lambda c: -c["dur"]))
         else:
             ch = pick(1.0, 2.6)
@@ -201,7 +210,7 @@ def main() -> None:
                 win = int(1.2 * SR)
                 starts = sorted(range(0, len(y) - win, win // 2), key=lambda s: -float(np.sqrt((y[s:s + win] ** 2).mean())))[:2]
                 chew = [(shape(y[s:s + win], 0.92 if kind == "sheep" else 1.15), f"{o['title'][5:40]} @{s / SR:.1f}s (chewing)") for s in starts]
-        if not chew and kind == "chicken":  # no feeding recording: short pecking clucks
+        if not chew:  # no feeding recording: short, soft calls, a little brisker (pecking clucks, munching murmurs)
             chew = [(shape(c["seg"], 1.08), c["where"] + " (brisker)") for c in pick(0.2, 0.7)]
         if not chew:
             log(f"!! {kind}: no eating sound (is {sp['eat']} downloaded?)")
