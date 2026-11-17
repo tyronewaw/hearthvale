@@ -60,6 +60,15 @@ try {
   await frames(6);
   await page.screenshot({ path: `shots/vibe-folk${tag}.png` });
   console.log('· vibe-folk');
+  // the god hand over the village
+  await page.evaluate(() => { const r = window.__hv.rig; r.zoom = 0.12; r.apply(); window.__hv.setTool('hand'); });
+  for (const [x, y] of [[560, 470], [600, 440], [640, 420]]) {
+    await page.mouse.move(x, y);
+    await frames(3);
+  }
+  await frames(10);
+  await page.screenshot({ path: `shots/vibe-hand${tag}.png` });
+  console.log('· vibe-hand');
 } finally {
   await browser.close();
   await server.close();
